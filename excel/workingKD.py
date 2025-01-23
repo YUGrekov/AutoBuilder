@@ -62,14 +62,12 @@ class DataExel():
                        is_tuple: bool,
                        select_column: tuple = None) -> dict | tuple:
         """Список с названиями столбцов.
-
         Args:
             uso (str): название шкафа
             number_row (int): номер строки с с названиями столбцов
             is_tuple (bool): флаг использования массива tuple
             select_column (tuple, optional): выбранные столбцы с
                                             номерами позиций.
-
         Returns:
             dict|tuple: либо то либо то
         """
@@ -153,8 +151,8 @@ class DataExel():
                 if contact is not None:
                     contact = str(contact).replace('.', ',')
 
-                if name is not None:
-                    name = name.replace('.', ',')
+                # if name is not None:
+                #    name = name.replace('.', ',')
 
                 if tag is None:
                     if schema is not None or type_s is not None:

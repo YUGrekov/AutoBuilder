@@ -113,8 +113,8 @@ class TableWidget(QTableWidget):
         super(TableWidget, self).__init__(parent)
         self.setStyleSheet("""
                            QTableWidget{
-                           font:13px Dihjauti;
-                           border: 2px solid #C4C4C3;
+                           font:13px times;
+                           border: 1px solid #a19f9f;
                            border-bottom-left-radius: 5;
                            border-bottom-right-radius: 5;
                            }""")
@@ -148,7 +148,7 @@ class TableWidget(QTableWidget):
         self.setHorizontalHeaderLabels(hat_name)
         self.verticalHeader().setVisible(False)
         self.installEventFilter(self)
-        style = "::section {""background-color: #bbbabf;}"
+        style = "::section {""background-color: #dbcaba;}"
         self.horizontalHeader().setStyleSheet(style)
         self.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
 
@@ -168,6 +168,7 @@ class TableWidget(QTableWidget):
                 self.setItem(tw_row, tw_column, item)
         # Видимость столбцов
         if not self.tw_dub:
+            self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             if end:
                 [self.setColumnHidden(idx, True) for idx in range(0, end)]
             else:
@@ -363,13 +364,13 @@ class PushButton(QPushButton):
         self.setText(self.text)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setStyleSheet("*{"
-                           "font:15px consolas;"
-                           "border: 2px solid #666665;"
+                           "font:13px times;"
+                           "border: 1px solid #a19f9f;"
                            "border-radius: 4px;"
                            f"background: {color};"
                            "padding: 4px;}"
-                           "*:hover{"f"background:'#707370';""color:'white'}"
-                           "*:pressed{background: '#4f45ba'}")
+                           "*:hover{"f"background:'#e0e0e0';""color:'black'}"
+                           "*:pressed{background: '#e0e0e0'}")
 
 
 class LineEdit(QLineEdit):
@@ -377,8 +378,8 @@ class LineEdit(QLineEdit):
         super(LineEdit, self).__init__(*args, **kwargs)
 
         self.setStyleSheet('''
-                           font:15px consolas;
-                           border: 2px solid #666665;
+                           font:13px times;
+                           border: 1px solid #666665;
                            border-radius: 4px;
                            padding: 4px;''')
 
@@ -548,13 +549,13 @@ class MainWindow(QMainWindow):
 
         self.logsTextEdit = LogsTextEdit(self)
         self.logsTextEdit.setStyleSheet('''
-                                font:12px consolas;
+                                font:13px times;
                                 background-color: #f0f0f0;
                                 border-top-left-radius: 5;
                                 border-top-right-radius: 5;
                                 border-bottom-left-radius: 5;
                                 border-bottom-right-radius: 5;
-                                border: 2px solid #C4C4C3;''')
+                                border: 1px solid #a19f9f;''')
         self.tableWidget = TableWidget(self.editSQL,
                                        self.table_us,
                                        self.logsTextEdit)
@@ -569,13 +570,13 @@ class MainWindow(QMainWindow):
         self.l_enter_req = LineEdit(self,
                                     placeholderText='Введите запрос',
                                     clearButtonEnabled=True)
-        b_addrow = PushButton('Добавить строку', '#bfd6bf')
-        b_delrow = PushButton('Удалить строку', '#d65860')
-        b_cleartabl = PushButton('Очистить таблицу', '#bbbabf')
-        b_deltabl = PushButton('Удалить таблицу', '#bbbabf')
-        b_apply_query = PushButton('Применить запрос', '#bfd6bf')
-        b_reset_query = PushButton('Сбросить запрос', '#bbbabf')
-        b_type_data = PushButton('Тип данных таблицы', '#bfd6bf')
+        b_addrow = PushButton('Добавить строку', '#92c486')
+        b_delrow = PushButton('Удалить строку', '#eb6574')
+        b_cleartabl = PushButton('Очистить таблицу', '#f0f0f0')
+        b_deltabl = PushButton('Удалить таблицу', '#f0f0f0')
+        b_apply_query = PushButton('Применить запрос', '#92c486')
+        b_reset_query = PushButton('Сбросить запрос', '#f0f0f0')
+        b_type_data = PushButton('Тип данных таблицы', '#92c486')
         b_links = PushButton('Ссылки', '#faf5cd')
 
         # Events
@@ -620,8 +621,8 @@ class MainWindow(QMainWindow):
         self.layout_v.addLayout(self.layout_g)
         self.layout_v.addWidget(self.splitter_v)
 
-        self.logsTextEdit.logs_msg('Запуск редактора базы SQL', 1)
-        self.logsTextEdit.logs_msg(f'Открыта таблица {self.table_us}', 1)
+        self.logsTextEdit.logs_msg('Редактор базы данных запущен', 1)
+        self.logsTextEdit.logs_msg(f'Открыта таблица: {self.table_us}', 0)
 
     def on_Change_one(self):
         '''Активность окна 1 и

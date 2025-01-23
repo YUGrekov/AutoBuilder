@@ -16,7 +16,6 @@ from PyQt5.QtWidgets import QPushButton
 from PyQt5.QtWidgets import QLabel
 from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtWidgets import QCheckBox
-# sys.path.append('../Project_Signal_Generator')
 from connect_log.logging_text import LogsTextEdit
 from window_editing import MainWindow as WinEditing
 from general_functions import General_functions as DopFunction
@@ -62,7 +61,7 @@ from request_sql import RequestSQL
 # from omx_object import AttrDIAGOmx
 
 
-SIZE_WORK_BACK = (1000, 500)
+SIZE_WORK_BACK = (1002, 500)
 SIZE_SPLIT_V = [500, 150]
 SIZE_SPLIT_H = [602, 40]
 
@@ -125,8 +124,9 @@ class GenFormButton(QPushButton):
     '''Общий конструктор класса кнопки.'''
     def __init__(self, *args, **kwargs):
         super(GenFormButton, self).__init__(*args, **kwargs)
-        self.setStyleSheet("""*{font:12px Arials;
+        self.setStyleSheet("""*{font:12px times;
                                 border: 1px solid #a19f9f;
+                                min-height: 18;
                                 padding: 4px; border-radius: 4}
                                 *:hover{background:#e0e0e0;
                                         color:'black'}
@@ -139,21 +139,21 @@ class LineEdit(QLineEdit):
         super(LineEdit, self).__init__(*args, **kwargs)
         self.setStyleSheet("""*{
                                 background-color: #f0f0f0;
-                                font:15px times;
-                                border: 2px solid #C4C4C3;
-                                border-bottom-color: #C2C7CB;
-                                padding: 3px;
-                                border-radius: 4}""")
+                                font:13px times;
+                                border: 1px solid #a19f9f;
+                                padding: 4px; border-radius: 4}""")
 
 
 class Label(QLabel):
     '''Конструктор класса кнопки.'''
     def __init__(self, *args, **kwargs):
         super(Label, self).__init__(*args, **kwargs)
+        self.fl_connect_bd = False
+
         self.setStyleSheet('''
                            background-color: #eb6574;
                            border: 1px solid #a19f9f;
-                           border-radius: 4; padding: 4px;
+                           border-radius:4; padding: 4px;
                            font:13px times;''')
 
     def connect_true(self):
@@ -175,7 +175,8 @@ class LabelSimple(QLabel):
     '''Конструктор класса кнопки.'''
     def __init__(self, *args, **kwargs):
         super(LabelSimple, self).__init__(*args, **kwargs)
-        self.setStyleSheet('''font:12px times;''')
+        self.setStyleSheet('''font:12px times; background: #a3d6d0;
+                           padding: 2px; border-radius: 3''')
         self.setAlignment(Qt.AlignCenter)
 
 
@@ -227,6 +228,7 @@ class EditWindows(QWidget):
     def __init__(self, logtext, parent=None):
         super(EditWindows, self).__init__(parent)
 
+        self.parent = parent
         self.logsTextEdit = logtext
         layout_v = QVBoxLayout(self)
 
@@ -253,12 +255,12 @@ class EditWindows(QWidget):
         name_table = self.combo_choise_tabl.currentText()
 
         if name_table == 'Выбери таблицу':
-            self.logsTextEdit.logs_msg('Не выбрана таблица для открытия окна для редактирования!', 2)
+            self.logsTextEdit.logs_msg('Не выбрана таблица для открытия окна для редактирования базы данных!', 2)
             return
         try:
             self.open_w1 = WinEditing(name_table)
             self.open_w1.show()
-            self.logsTextEdit.logs_msg(f'''Открыто окно для редактирования №1.\n
+            self.logsTextEdit.logs_msg(f'''Открыто окно для редактирования базы данных №1.\n
                                         Таблица: {name_table}''', 1)
         except Exception:
             self.logsTextEdit.logs_msg('''Невозможно подключиться к таблице.
@@ -270,12 +272,12 @@ class EditWindows(QWidget):
         name_table = self.combo_choise_tabl.currentText()
 
         if name_table == 'Выбери таблицу':
-            self.logsTextEdit.logs_msg('Не выбрана таблица для открытия окна для редактирования!', 2)
+            self.logsTextEdit.logs_msg('Не выбрана таблица для открытия окна для редактирования базы данных!', 2)
             return
         try:
             self.open_w2 = WinEditing(name_table)
             self.open_w2.show()
-            self.logsTextEdit.logs_msg(f'''Открыто окно для редактирования №2.\n
+            self.logsTextEdit.logs_msg(f'''Открыто окно для редактирования базы данных №2.\n
                                         Таблица: {name_table}''', 1)
         except Exception:
             self.logsTextEdit.logs_msg('''Невозможно подключиться к таблице.
@@ -284,7 +286,7 @@ class EditWindows(QWidget):
     def update_list(self):
         '''Функция обновляет список таблиц по команде.'''
         try:
-            reqsql = RequestSQL()
+            self.parent.tab_1.connect_devSQL()
         except Exception:
             self.logsTextEdit.logs_msg('''Невозможно обновить список.
                                        Нет подключения к БД разработки''', 2)
@@ -292,7 +294,7 @@ class EditWindows(QWidget):
             self.combo_choise_tabl.addItem('Выбери таблицу')
             return
 
-        list_table = reqsql.get_tabl()
+        list_table = db.get_tables()
         self.combo_choise_tabl.clear()
         for table in list_table:
             self.combo_choise_tabl.addItem(str(table))
@@ -307,7 +309,6 @@ class TabConnect(QWidget):
         self.logsTextEdit = logtext
         self.parent = parent
         self.dop_function = DopFunction()
-        self.fl_connect_bd = False
 
         layout_v1 = QVBoxLayout()
         layout_v2 = QVBoxLayout()
@@ -388,7 +389,7 @@ class TabConnect(QWidget):
     def connect_devSQL(self):
         '''Обработка клика по подключению к БД разработки.'''
         # Флаг подклюбчения к базе разработки
-        if self.fl_connect_bd:
+        if self.parent.connect_SQL_edit.fl_connect_bd:
             return
 
         try:
@@ -397,7 +398,6 @@ class TabConnect(QWidget):
                     password=connect.password,
                     host=connect.host,
                     port=connect.port)
-
             if not self.dop_function.exist_check_db(str(connect.database).lower(),
                                                     connect.user,
                                                     connect.password,
@@ -408,7 +408,7 @@ class TabConnect(QWidget):
             self.logsTextEdit.logs_msg('БД разработки: подключение установлено', 0)
             self.parent.connect_SQL_edit.setText('Соединение с БД разработки установлено')
             self.parent.connect_SQL_edit.connect_true()
-            self.fl_connect_bd = True
+            self.parent.connect_SQL_edit.fl_connect_bd = True
         except (Exception, Error) as error:
             self.logsTextEdit.logs_msg(f'Ошибка поключения к БД разработки: {error}', 2)
 
@@ -419,7 +419,7 @@ class TabConnect(QWidget):
             self.logsTextEdit.logs_msg('БД разработки: подключение разорвано', 2)
             self.parent.connect_SQL_edit.setText('Соединение с БД разработки разорвано')
             self.parent.connect_SQL_edit.connect_false()
-            self.fl_connect_bd = False
+            self.parent.connect_SQL_edit.fl_connect_bd = False
         except (Exception, Error) as error:
             self.logsTextEdit.logs_msg(f'Ошибка: {error}', 2)
 
@@ -479,12 +479,12 @@ class ImportKD(QWidget):
         self.fl_connect = False
         self.fl_load_hat = False
 
-        button_connectKD = GenFormButton('Подключиться к КД')
-        button_disconnectKD = GenFormButton('Отключиться от КД')
+        button_connectKD = GenFormButton('Подключить Excel')
+        button_disconnectKD = GenFormButton('Отключить Excel')
         button_read_table = GenFormButton('Подключиться к таблице')
         button_clear_table = GenFormButton('Очистить таблицу')
-        button_add_signals = GenFormButton('Добавить сигналы нового УСО')
-        button_update_signals = GenFormButton('Обновить сигналы УСО')
+        button_add_signals = GenFormButton('Добавить новые сигналы')
+        button_update_signals = GenFormButton('Обновить сигналы')
         # Events buttons
         button_connectKD.clicked.connect(self.connectKD)
         button_disconnectKD.clicked.connect(self.disconnectKD)
@@ -529,7 +529,7 @@ class ImportKD(QWidget):
 
         layout_v0.addWidget(button_connectKD)
         layout_v0.addWidget(button_disconnectKD)
-        layout_v0.addSpacing(97)
+        layout_v0.addSpacing(107)
         layout_v0.addWidget(button_clear_table)
         layout_v0.addStretch()
 
@@ -568,9 +568,9 @@ class ImportKD(QWidget):
         layout_h1.addLayout(layout_v3)
         layout_h1.addStretch()
 
-        layout_h2.addSpacing(347)
+        layout_h2.addSpacing(380)
         layout_h2.addWidget(button_update_signals)
-        layout_h2.addSpacing(40)
+        layout_h2.addSpacing(60)
         layout_h2.addWidget(button_add_signals)
         layout_h2.addStretch()
 
@@ -1095,21 +1095,21 @@ class MainWindow(QMainWindow):
 
     def edit_tab(self):
         '''Добавление на экран виджетов для запуска окна редактирования.'''
-        tab_1 = EditWindows(self.logsTextEdit)
+        tab_1 = EditWindows(self.logsTextEdit, self)
         self.edit_window.addTab(tab_1, 'Окно редактирования БД SQL')
 
     def set_tabs(self):
-        tab_1 = TabConnect(self.logsTextEdit, self)
+        self.tab_1 = TabConnect(self.logsTextEdit, self)
         tab_2 = ImportKD(self.logsTextEdit, self)
         tab_3 = TabConnect(self.logsTextEdit)
         tab_4 = TabConnect(self.logsTextEdit)
         tab_5 = GenHMIandDev(self.logsTextEdit)
         tab_6 = TabConnect(self.logsTextEdit)
 
-        self.tabwidget.addTab(tab_1, 'Соединение')
+        self.tabwidget.addTab(self.tab_1, 'Соединение')
         self.tabwidget.addTab(tab_2, 'Импорт КЗФКП')
-        self.tabwidget.addTab(tab_3, 'SQL разработки')
-        self.tabwidget.addTab(tab_4, 'SQL проекта')
+        self.tabwidget.addTab(tab_3, 'БД разработки')
+        self.tabwidget.addTab(tab_4, 'БД проекта')
         self.tabwidget.addTab(tab_5, 'ВУ')
         self.tabwidget.addTab(tab_6, 'СУ')
 
