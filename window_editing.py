@@ -704,7 +704,7 @@ class MainWindow(QMainWindow):
         self.tableWidget_dub.insertRow(rowcount)
         self.tableWidget_dub.setItem(rowcount, 0, QTableWidgetItem(f'{sum_cell}'))
 
-        self.logsTextEdit.logs_msg('В конец таблицы добавлена новая строка', 0)
+        self.logsTextEdit.logs_msg(f'Строка {sum_cell} добавлена в конец таблицы', 0)
 
     def delete_row(self):
         '''Удаляем выбранную строку.'''
@@ -726,7 +726,7 @@ class MainWindow(QMainWindow):
         self.tableWidget_dub.removeRow(row)
         self.tableWidget_dub.selectionModel().clearCurrentIndex()
 
-        self.logsTextEdit.logs_msg(f'Удалена строка, id = {value_id}', 3)
+        self.logsTextEdit.logs_msg(f'Строка {value_id} удалена', 3)
 
     def clear_tabl(self):
         '''Удаления всех данных таблицы, без столбцов.'''
@@ -768,9 +768,6 @@ class MainWindow(QMainWindow):
                                                                                          self.logsTextEdit)
         if column == 'error':
             return
-        # if self.table_us == table_now:
-        #     self.logsTextEdit.logs_msg('В запросе таблица повторяется', 2)
-        #     return
 
         self.table_us = table_now
 
@@ -792,10 +789,6 @@ class MainWindow(QMainWindow):
     def reset_query(self):
         '''Сброс запроса и возврат таблицы к состоянию до запроса.'''
         rowcount = self.tableWidget.row_count_tabl()
-
-        # if self.table_us == self.table_old:
-        #     self.logsTextEdit.logs_msg('Открыта первоначальная таблица', 2)
-        #     return
 
         self.table_us = self.table_old
 

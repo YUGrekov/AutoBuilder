@@ -23,7 +23,7 @@ from create_database.new_db import NewDB
 from model import connect
 from model import db
 from model import db_prj
-# from model_new import Signals
+from model import Signals
 from excel.workingKD import Import_in_SQL
 from request_sql import RequestSQL
 # from hmi_defence import DefenceMap
@@ -221,6 +221,20 @@ class ComboBox(QComboBox):
                            padding: 4px;
                            border: 1px solid #a19f9f;
                            font: 13px times;''')
+
+    def color_red(self):
+        self.setStyleSheet('''
+                            color: red;
+                            padding: 4px;
+                            border: 1px solid #a19f9f;
+                            font: 13px times;''')
+
+    def color_green(self):
+        self.setStyleSheet('''
+                            color: green;
+                            padding: 4px;
+                            border: 1px solid #a19f9f;
+                            font: 13px times;''')
 
 
 class EditWindows(QWidget):
@@ -584,13 +598,13 @@ class ImportKD(QWidget):
                 raise
             self.connectKD.disconnect_exel()
         except Exception:
-            self.logsTextEdit.logs_msg('''Импорт КД: нечего разрывать!
-                                       Соединение не было установлено''', 3)
+            self.logsTextEdit.logs_msg('''Импорт КД: соединение уже было разорвано''', 3)
             return
 
         self.fl_connect = False
         self.parent.connect_exel.connect_false()
-        self.logsTextEdit.logs_msg('Импорт КД: соединение c Exel разорвано', 0)
+        self.parent.connect_exel.setText('''Соединение с Exel разорвано''')
+        self.logsTextEdit.logs_msg('Импорт КД: соединение c Exel разорвано', 2)
 
     def connectKD(self):
         '''Подключение к файлу КД(КЗФКП) формата Exel.'''
@@ -604,7 +618,7 @@ class ImportKD(QWidget):
                                        соединение c Exel установлено''', 0)
             self.logsTextEdit.logs_msg('Импорт КД: названия шкафов обновлены', 0)
             self.parent.connect_exel.connect_true()
-            self.parent.connect_exel.setText('''Импорт КД: соединение с Exel установлено''')
+            self.parent.connect_exel.setText('''Соединение с Exel установлено''')
             self.fl_connect = True
         except Exception:
             self.logsTextEdit.logs_msg(f'''Импорт КД:
@@ -615,32 +629,45 @@ class ImportKD(QWidget):
         '''Чтение шапки таблицы для определения позиции столбцов.'''
         name_uso = self.combo_choise_tabl.currentText()
         if not self.fl_connect:
-            self.logsTextEdit.logs_msg('''Импорт КД: нет
-                                       подключения к файлу Exel''', 2)
+            self.logsTextEdit.logs_msg('''Импорт КД: нет подключения к файлу Exel''', 2)
             return
         try:
             row = "".join(self.select_row.text().split())
-            self.logsTextEdit.logs_msg(f'''Импорт КД: выбрано УСО: {name_uso},
-                                       ряд таблицы: {int(row)}''', 1)
+            self.logsTextEdit.logs_msg(f'''Импорт КД: выбрано УСО: {name_uso}, номер строки: {int(row)}''', 1)
             self.fl_load_hat = True
         except Exception:
-            self.logsTextEdit.logs_msg('''Импорт КД:
-                                       некорректный номер строки''', 2)
+            self.logsTextEdit.logs_msg('''Импорт КД: некорректный номер строки''', 2)
             return
 
         self.fill_combobox(self.connectKD.read_hat_table(name_uso, row, False))
 
     def fill_combobox(self, hat_table: dict):
         '''Заполняем названиями столбцы для верного импорта сигналов.'''
-        self.combo_type.addItems(hat_table)
-        self.combo_shema.addItems(hat_table)
-        self.combo_basket.addItems(hat_table)
-        self.combo_tag.addItems(hat_table)
-        self.combo_klk.addItems(hat_table)
-        self.combo_kont.addItems(hat_table)
-        self.combo_module.addItems(hat_table)
-        self.combo_name.addItems(hat_table)
-        self.combo_channel.addItems(hat_table)
+        list_combobox = [(self.combo_type, 'тип'), (self.combo_shema, 'схема'), (self.combo_basket, 'корз'),
+                         (self.combo_tag, 'tэг'), (self.combo_klk, 'клк'), (self.combo_kont, 'конт'),
+                         (self.combo_module, 'мод'), (self.combo_name, 'наименование'), (self.combo_channel, 'кан')]
+
+        name_uso = self.combo_choise_tabl.currentText()
+        count_all = 0
+        for struct in list_combobox:
+            struct[0].addItems(hat_table)
+
+            count_index = 0
+            struct[0].setCurrentText('Найди в списке')
+            struct[0].color_red()
+            for title in hat_table:
+                if struct[1] in str(title).lower():
+                    struct[0].setCurrentIndex(count_index)
+                    struct[0].color_green()
+                    count_all += 1
+                    break
+                count_index += 1
+
+        if count_all == len(list_combobox):
+            self.logsTextEdit.logs_msg(f'''Импорт КД: заголовок нужного столбца найден в УСО: {name_uso}''', 0)
+        else:
+            self.logsTextEdit.logs_msg(f'''Импорт КД: заголовок нужного столбца
+                                       не найден в УСО: {name_uso}. Укажите вручную!''', 2)
 
     def clear_table(self):
         '''Полная очистка(не удаление) таблицы Signals.'''
@@ -660,8 +687,7 @@ class ImportKD(QWidget):
         else:
             reqsql.new_table(Signals)
             self.logsTextEdit.logs_msg('''Импорт КД:
-                                       таблица signals создана в БД,
-                                       т.к. её существовало''', 1)
+                                       таблица signals создана в БД''', 1)
 
     def hat_list(self):
         dict_column = {'type_signal': self.combo_type.currentText(),
@@ -679,8 +705,7 @@ class ImportKD(QWidget):
     def add_new_signals(self):
         '''Добавление нового шкафа с сигналами.'''
         if not self.fl_load_hat:
-            self.logsTextEdit.logs_msg('''Импорт КД:
-                                       необходимо подключиться к таблице''', 2)
+            self.logsTextEdit.logs_msg('''Импорт КД: необходимо подключиться к таблице''', 2)
             return
         name_uso = self.combo_choise_tabl.currentText()
         try:
@@ -690,8 +715,7 @@ class ImportKD(QWidget):
             self.connectKD.database_entry_SQL(data_uso, name_uso)
 
         except Exception:
-            self.logsTextEdit.logs_msg(f'''Импорт КД:
-                                       ошибка {traceback.format_exc()}''', 2)
+            self.logsTextEdit.logs_msg(f'''Импорт КД: ошибка {traceback.format_exc()}''', 2)
             return
 
     def update_signals(self):
