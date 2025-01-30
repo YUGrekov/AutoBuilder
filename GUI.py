@@ -237,6 +237,7 @@ class ComboBox(QComboBox):
                             font: 13px times;''')
 
 
+# Построение редактора SQL
 class EditWindows(QWidget):
     '''Конструктор класса редактирования окна разработки.'''
     def __init__(self, logtext, parent=None):
@@ -315,6 +316,7 @@ class EditWindows(QWidget):
         self.logsTextEdit.logs_msg('Список таблиц обновлен', 1)
 
 
+# Главная страница. Подключение к БД
 class TabConnect(QWidget):
     '''Конструктор класса. Проверка и подключение к БД.'''
     def __init__(self, logtext, parent=None):
@@ -482,6 +484,7 @@ class TabConnect(QWidget):
             self.connect_devSQL()
 
 
+# Импорт Excel
 class ImportKD(QWidget):
     '''Проверка и подключение к БД.'''
     def __init__(self, logtext, parent=None):
@@ -496,6 +499,10 @@ class ImportKD(QWidget):
         button_connectKD = GenFormButton('Подключить Excel')
         button_disconnectKD = GenFormButton('Отключить Excel')
         button_read_table = GenFormButton('Подключиться к таблице')
+        button_read_table.setStyleSheet("""*{font:12px times; border: 2px solid #d68336;
+                                            min-height: 18; padding: 4px; border-radius: 4}
+                                            *:hover{background:#e0e0e0; color:'black'}
+                                            *:pressed{background: '#e0e0e0'}""")
         button_clear_table = GenFormButton('Очистить таблицу')
         button_add_signals = GenFormButton('Добавить новые сигналы')
         button_update_signals = GenFormButton('Обновить сигналы')
@@ -508,20 +515,26 @@ class ImportKD(QWidget):
         button_update_signals.clicked.connect(self.update_signals)
 
         self.combo_choise_tabl = ComboBox('Шкаф')
-        self.combo_type = ComboBox('Тип')
-        self.combo_shema = ComboBox('Схема')
-        self.combo_basket = ComboBox('Корзина')
+        self.combo_choise_tabl.setStyleSheet('''padding: 4px;
+                                                border: 2px solid #d68336;
+                                                font: 13px times;''')
+        self.combo_type = ComboBox('Выбери в списке')
+        self.combo_shema = ComboBox('Выбери в списке')
+        self.combo_basket = ComboBox('Выбери в списке')
 
         self.select_row = LineEdit(placeholderText='Номер строки заголовка',
                                    clearButtonEnabled=True)
+        self.select_row.setStyleSheet("""*{background-color: #f0f0f0; font:13px times;
+                                           border: 2px solid #d68336;
+                                           padding: 4px; border-radius: 4}""")
 
-        self.combo_tag = ComboBox('Тэг')
-        self.combo_klk = ComboBox('Клеммник')
-        self.combo_module = ComboBox('Модуль')
+        self.combo_tag = ComboBox('Выбери в списке')
+        self.combo_klk = ComboBox('Выбери в списке')
+        self.combo_module = ComboBox('Выбери в списке')
 
-        self.combo_name = ComboBox('Наименование')
-        self.combo_kont = ComboBox('Контакт')
-        self.combo_channel = ComboBox('Канал')
+        self.combo_name = ComboBox('Выбери в списке')
+        self.combo_kont = ComboBox('Выбери в списке')
+        self.combo_channel = ComboBox('Выбери в списке')
 
         label_type = LabelSimple('Тип')
         label_schema = LabelSimple('Схема')
@@ -737,6 +750,14 @@ class ImportKD(QWidget):
             return
 
 
+# Заполнение SQL разработки
+class DevSQL(QWidget):
+    '''Заполнение и редактирование БД разработки.'''
+    def __init__(self, logtext, parent=None):
+        super(DevSQL, self).__init__(parent)
+
+
+# Заполнение DevStudio
 class GenHMIandDev(QWidget):
     '''Генерация ВУ HMI и DevStudio.'''
     def __init__(self, logtext, parent=None):
@@ -1125,7 +1146,7 @@ class MainWindow(QMainWindow):
     def set_tabs(self):
         self.tab_1 = TabConnect(self.logsTextEdit, self)
         tab_2 = ImportKD(self.logsTextEdit, self)
-        tab_3 = TabConnect(self.logsTextEdit)
+        tab_3 = DevSQL(self.logsTextEdit)
         tab_4 = TabConnect(self.logsTextEdit)
         tab_5 = GenHMIandDev(self.logsTextEdit)
         tab_6 = TabConnect(self.logsTextEdit)
