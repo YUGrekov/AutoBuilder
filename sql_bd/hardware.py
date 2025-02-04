@@ -181,7 +181,7 @@ class HW(ConstValues, BaseType):
         # self.logsTextEdit.logs_msg(f'''SQL. Hardware. Корзина
         #                            {data.uso}.A{data.basket} добавлена''', 1)
 
-    def hardware(self, kk_flag: bool):
+    def work_func(self, kk_flag: bool = False):
         """Заполнение таблицы.
         Args:
             kk_flag (bool): Нужен ли КК
@@ -236,7 +236,3 @@ class HW(ConstValues, BaseType):
             print({traceback.format_exc()})
             # self.logsTextEdit.logs_msg(f'''SQL. Hardware. Ошибка
             #                            {traceback.format_exc()}''', 2)
-
-
-a = HW()
-a.hardware(True)

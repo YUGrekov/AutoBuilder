@@ -2,6 +2,8 @@ import sys
 import traceback
 from psycopg2 import Error
 from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QThread
+from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtGui import QIcon
 from PyQt5.QtGui import QIntValidator
 from PyQt5.QtWidgets import QApplication
@@ -26,6 +28,8 @@ from model import db_prj
 from model import Signals
 from excel.workingKD import Import_in_SQL
 from request_sql import RequestSQL
+from sql_bd.hardware import HW
+from sql_bd.diskrets_in import InDiskrets
 # from hmi_defence import DefenceMap
 # from hmi_uso import DaignoPicture
 # from hmi_siren import Alarm_map
@@ -107,11 +111,15 @@ class CheckBox(QCheckBox):
     '''Конструктор класса чекбокса.'''
     def __init__(self, *args, **kwargs):
         super(CheckBox, self).__init__(*args, **kwargs)
-        self.setStyleSheet("""*{
-                           font:14px times;
-                           padding: 3px;
-                           border-radius: 4
-                           }""")
+        self.setStyleSheet("""*{font:13px times;
+                                border: 1px solid #a19f9f;
+                                min-height: 20;
+                                min-width: 100;
+                                max-width: 100;
+                                padding: 4px; border-radius: 4}
+                                *:hover{background:#e0e0e0;
+                                        color:'black'}
+                                *:pressed{background: '#e0e0e0'}""")
 
 
 class PushButton(QPushButton):
@@ -496,6 +504,10 @@ class ImportKD(QWidget):
         self.fl_connect = False
         self.fl_load_hat = False
 
+        name_page = ElementSignature('\t\t\t\tИмпорт сигналов из файла КД\t\t\t\t')
+        name_page.setStyleSheet("""*{font:14px times; background: #6979c9; color: white;
+                                     padding: 2px; border-radius: 3}""")
+
         button_connectKD = GenFormButton('Подключить Excel')
         button_disconnectKD = GenFormButton('Отключить Excel')
         button_read_table = GenFormButton('Подключиться к таблице')
@@ -553,6 +565,7 @@ class ImportKD(QWidget):
         layout_v4 = QVBoxLayout(self)
         layout_h1 = QHBoxLayout()
         layout_h2 = QHBoxLayout()
+        layout_h3 = QHBoxLayout()
 
         layout_v0.addWidget(button_connectKD)
         layout_v0.addWidget(button_disconnectKD)
@@ -601,6 +614,9 @@ class ImportKD(QWidget):
         layout_h2.addWidget(button_add_signals)
         layout_h2.addStretch()
 
+        layout_h3.addWidget(name_page)
+
+        layout_v4.addLayout(layout_h3)
         layout_v4.addLayout(layout_h1)
         layout_v4.addLayout(layout_h2)
         layout_v4.addStretch()
@@ -755,6 +771,128 @@ class DevSQL(QWidget):
     '''Заполнение и редактирование БД разработки.'''
     def __init__(self, logtext, parent=None):
         super(DevSQL, self).__init__(parent)
+
+        self.logsTextEdit = logtext
+        self.dop_function = DopFunction()
+
+        layout_h1 = QHBoxLayout()
+        layout_h2 = QHBoxLayout()
+        layout_h3 = QHBoxLayout()
+        layout_h4 = QHBoxLayout()
+        layout_v1 = QVBoxLayout()
+        layout_v2 = QVBoxLayout()
+        layout_v3 = QVBoxLayout()
+        layout_v4 = QVBoxLayout()
+        layout_v5 = QVBoxLayout()
+        layout_v6 = QVBoxLayout(self)
+
+        name_page = ElementSignature('\t\t\t\tЗаполнение таблиц БД SQL разработки\t\t\t\t')
+        name_page.setStyleSheet("""*{font:14px times; background: #6979c9; color: white;
+                                     padding: 2px; border-radius: 3}""")
+
+        help_1 = ElementSignature('* таблица signals должна быть заполнена\n* связь с БД разработки должна быть установлена')
+        help_1.setStyleSheet("""*{font:10px times;
+                             }""")
+
+        self.checkbox_hw = CheckBox('HardWare')
+        self.checkbox_uso = CheckBox('USO')
+        self.checkbox_ai = CheckBox('AI')
+        self.checkbox_ao = CheckBox('AO')
+        self.checkbox_di = CheckBox('DI')
+        self.checkbox_do = CheckBox('DO')
+        self.checkbox_rs = CheckBox('RS')
+        self.checkbox_umpna = CheckBox('UMPNA')
+        self.checkbox_zd = CheckBox('ZD')
+        self.checkbox_vs = CheckBox('VS')
+        self.checkbox_ktpr = CheckBox('KTPR')
+        self.checkbox_pi = CheckBox('PI')
+        self.checkbox_pt = CheckBox('PT')
+
+        button_start = GenFormButton('Заполнить таблицу')
+        button_clear = GenFormButton('Очистить таблицу')
+
+        button_start.clicked.connect(self.click_fill_table)
+        button_clear.clicked.connect(self.clear_table)
+
+        layout_v1.addWidget(self.checkbox_hw)
+        layout_v1.addWidget(self.checkbox_uso)
+        layout_v1.addStretch()
+
+        layout_v2.addWidget(self.checkbox_ai)
+        layout_v2.addWidget(self.checkbox_ao)
+        layout_v2.addWidget(self.checkbox_di)
+        layout_v2.addWidget(self.checkbox_do)
+        layout_v2.addWidget(self.checkbox_rs)
+        layout_v2.addStretch()
+
+        layout_v3.addWidget(self.checkbox_umpna)
+        layout_v3.addWidget(self.checkbox_zd)
+        layout_v3.addWidget(self.checkbox_vs)
+        layout_v3.addStretch()
+
+        layout_v4.addWidget(self.checkbox_ktpr)
+        layout_v4.addStretch()
+
+        layout_v5.addWidget(self.checkbox_pi)
+        layout_v5.addWidget(self.checkbox_pt)
+        layout_v5.addStretch()
+
+        layout_h1.addWidget(name_page)
+        layout_h1.addStretch()
+
+        layout_h2.addLayout(layout_v1)
+        layout_h2.addLayout(layout_v2)
+        layout_h2.addLayout(layout_v3)
+        layout_h2.addLayout(layout_v4)
+        layout_h2.addLayout(layout_v5)
+
+        layout_h3.addWidget(button_start)
+        layout_h3.addSpacing(80)
+        layout_h3.addWidget(button_clear)
+
+        layout_h4.addWidget(help_1)
+
+        layout_v6.addLayout(layout_h1)
+        layout_v6.addLayout(layout_h2)
+        layout_v6.addLayout(layout_h3)
+        layout_v6.addLayout(layout_h4)
+
+    def check_attr(self):
+        '''Проверка выставленной галочки.'''
+        list_param = []
+        try:
+            list_help = {self.checkbox_hw: ['hardware', HW(self.logsTextEdit)],
+                         self.checkbox_di: ['di', InDiskrets(self.logsTextEdit)]}
+
+        except Exception:
+            self.logsTextEdit.logs_msg('''БД разработки: нет подключения''', 2)
+            return list_param
+
+        for param, value in list_help.items():
+            if param.isChecked():
+                list_param.append(value)
+        return list_param
+
+    def clear_table(self):
+        '''Очистка(не удаление) таблицы.'''
+        for param in self.check_attr():
+            try:
+                reqsql = RequestSQL()
+                # Проверяем существование таблицы. В случае True чистим, иначе пропускаем
+                if self.dop_function.check_in_table(param[0], reqsql.get_tabl()):
+                    reqsql.clear_table(param[0])
+                    self.logsTextEdit.logs_msg(f'''БД разработки: таблица {param[0]} очищена''', 1)
+                else:
+                    self.logsTextEdit.logs_msg(f'''БД разработки: таблица {param[0]} отсутствует в БД разработки''', 2)
+
+            except Exception:
+                self.logsTextEdit.logs_msg('''БД разработки: нет подключения''', 2)
+                return
+
+    def click_fill_table(self):
+        '''Заполнение таблицы БД.'''
+        for param in self.check_attr(): 
+            param[1].work_func()
 
 
 # Заполнение DevStudio
@@ -1137,6 +1275,7 @@ class MainWindow(QMainWindow):
         layout_v.addLayout(layout_h)
 
         self.logsTextEdit.logs_msg('Генератор разработки проекта запущен', 1)
+        db.init(None)
 
     def edit_tab(self):
         '''Добавление на экран виджетов для запуска окна редактирования.'''
@@ -1180,6 +1319,21 @@ class MainWindow(QMainWindow):
     def clear_jornal(self):
         '''Чистка журнала при нажатии кнопки.'''
         self.logsTextEdit.clear()
+
+
+class ThreadClass(QThread):
+    any_signal = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super(ThreadClass, self).__init__(parent)
+        self.is_running = True
+
+    def run(self):
+        self.any_signal.emit()
+
+    def stop(self):
+        self.is_running = False
+        self.terminate()
 
 
 if __name__ == '__main__':
