@@ -1,28 +1,19 @@
-from connect_log.connect_settings import Connect
-from peewee import PostgresqlDatabase
-from peewee import Model
+# from peewee import Model
 from peewee import CharField
 from peewee import BooleanField
 from peewee import IntegerField
 from peewee import DoubleField
-from playhouse.migrate import PostgresqlMigrator
+from base_model import BaseModel
+# from playhouse.migrate import PostgresqlMigrator
 
-connect = Connect()
-# db = PostgresqlDatabase(None)
-db = PostgresqlDatabase(str(connect.database).lower(),
-                        user=connect.user,
-                        password=connect.password,
-                        host=connect.host,
-                        port=connect.port)
-
-db_prj = PostgresqlDatabase(None)
-migrator = PostgresqlMigrator(db)
+# Инициализация мигратора
+# migrator = PostgresqlMigrator(db)
 
 
-class BaseModel(Model):
-    class Meta:
-        database = db
-        order_by = id
+# class BaseModel(Model):
+#     class Meta:
+#         database = None
+#         order_by = id
 
 
 class Signals(BaseModel):

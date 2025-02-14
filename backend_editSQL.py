@@ -150,9 +150,9 @@ class Editing_SQL():
                 column_name = i[0]
                 data_type = i[1]
                 try:
-                    list_a = [column_name,  dict_rus[column_name], data_type]
+                    list_a = [column_name, dict_rus[column_name], data_type]
                 except Exception:
-                    list_a = [column_name,  '', data_type]
+                    list_a = [column_name, '', data_type]
                 type_list.append(list_a)
         except Exception:
             logging.logs_msg(f'Окно тип данных: ошибка: {traceback.format_exc()}', 2)

@@ -1,5 +1,6 @@
 import sys
 import traceback
+import time
 from psycopg2 import Error
 from PyQt5.QtCore import Qt
 from PyQt5.QtCore import QThread
@@ -19,17 +20,19 @@ from PyQt5.QtWidgets import QLabel
 from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtWidgets import QCheckBox
 from connect_log.logging_text import LogsTextEdit
-from window_editing import MainWindow as WinEditing
+# from window_editing import MainWindow as WinEditing
 from general_functions import General_functions as DopFunction
-from create_database.new_db import NewDB
-from model import connect
-from model import db
-from model import db_prj
-from model import Signals
-from excel.workingKD import Import_in_SQL
-from request_sql import RequestSQL
-from sql_bd.hardware import HW
-from sql_bd.diskrets_in import InDiskrets
+# from manager_db.new_db import NewDB
+from base_model import BaseModel
+from manager_db.connect_bd import DatabaseManager
+# from model import connect
+# from model import db
+# from model import db_prj
+from connect_log.connect_settings import Connect
+# from excel.workingKD import Import_in_SQL
+# from request_sql import RequestSQL
+# from sql_bd.hardware import HW
+# from sql_bd.diskrets_in import InDiskrets
 # from hmi_defence import DefenceMap
 # from hmi_uso import DaignoPicture
 # from hmi_siren import Alarm_map
@@ -333,47 +336,45 @@ class TabConnect(QWidget):
         self.logsTextEdit = logtext
         self.parent = parent
         self.dop_function = DopFunction()
+        self.connect = Connect()
 
+        self.setup_ui()
+
+    def setup_ui(self):
         layout_v1 = QVBoxLayout()
         layout_v2 = QVBoxLayout()
         layout_v3 = QVBoxLayout()
         layout_h1 = QHBoxLayout()
         layout_h2 = QHBoxLayout(self)
+
         # Подписи
+        self.setup_labels(layout_v1, layout_v2)
+        # Кнопки
+        self.setup_buttons(layout_v1, layout_v2)
+        # Новая БД
+        self.setup_new_db(layout_v3, layout_h1)
+
+        layout_h2.addLayout(layout_v1)
+        layout_h2.addLayout(layout_v2)
+        layout_h2.addLayout(layout_v3)
+        layout_h2.addStretch()
+
+    def setup_labels(self, layout_v1, layout_v2):
         label_dev_sign = ElementSignature('\tБаза данных разработки\t')
         label_dev_sign.label()
-        label_dev_database = ElementSignature(f'Название:         {connect.database}')
-        label_dev_user = ElementSignature(f'Пользователь:  {connect.user}')
-        label_dev_pwd = ElementSignature(f'Пароль:            {connect.password}')
-        label_dev_host = ElementSignature(f'Адрес:              {connect.host}')
-        label_dev_port = ElementSignature(f'Порт:                {connect.port}')
+        label_dev_database = ElementSignature(f'Название:         {self.connect.database}')
+        label_dev_user = ElementSignature(f'Пользователь:  {self.connect.user}')
+        label_dev_pwd = ElementSignature(f'Пароль:            {self.connect.password}')
+        label_dev_host = ElementSignature(f'Адрес:              {self.connect.host}')
+        label_dev_port = ElementSignature(f'Порт:                {self.connect.port}')
 
         label_prj_sign = ElementSignature('\tБаза данных проекта\t\t')
         label_prj_sign.label()
-        label_prj_database = ElementSignature(f'Название:         {connect.database_msg}')
-        label_prj_user = ElementSignature(f'Пользователь:  {connect.user_msg}')
-        label_prj_pwd = ElementSignature(f'Пароль:            {connect.password_msg}')
-        label_prj_host = ElementSignature(f'Адрес:              {connect.host_msg}')
-        label_prj_port = ElementSignature(f'Порт:                {connect.port_msg}')
-        # Кнопки
-        self.button_connect_devSQL = GenFormButton('Подключиться к БД')
-        self.button_connect_devSQL.setToolTip('Подключение к БД разработки')
-        self.button_connect_prjSQL = GenFormButton('Подключиться к БД')
-        self.button_connect_prjSQL.setToolTip('Подключение к БД проекта')
-        self.button_disconnect_devSQL = GenFormButton('Отключиться от БД')
-        self.button_disconnect_prjSQL = GenFormButton('Отключиться от БД')
-        self.button_connect_devSQL.clicked.connect(self.connect_devSQL)
-        self.button_connect_prjSQL.clicked.connect(self.connect_prjSQL)
-        self.button_disconnect_devSQL.clicked.connect(self.disconnect_devSQL)
-        self.button_disconnect_prjSQL.clicked.connect(self.disconnect_prjSQL)
-        # Новая БД
-        label_newBD_1 = ElementSignature('Новый шаблон SQL БД разработки\t')
-        label_newBD_1.label()
-        self.button_newDB = GenFormButton('Создать базу данных')
-        self.button_newDB.setToolTip('''Создается новая БД вместе с пустыми таблицами под определенную систему(МНС, ПТ и тд.).\nНазвание БД берется из файла init_conf.cfg в разделе [SQL] - database''')
-        self.button_newDB.clicked.connect(self.clicked_newDB)
-        self.checkbox_sys_mns = CheckBox('МНС')
-        self.checkbox_sys_pt = CheckBox('ПТ')
+        label_prj_database = ElementSignature(f'Название:         {self.connect.database_msg}')
+        label_prj_user = ElementSignature(f'Пользователь:  {self.connect.user_msg}')
+        label_prj_pwd = ElementSignature(f'Пароль:            {self.connect.password_msg}')
+        label_prj_host = ElementSignature(f'Адрес:              {self.connect.host_msg}')
+        label_prj_port = ElementSignature(f'Порт:                {self.connect.port_msg}')
 
         layout_v1.addWidget(label_dev_sign)
         layout_v1.addWidget(label_dev_database)
@@ -381,9 +382,6 @@ class TabConnect(QWidget):
         layout_v1.addWidget(label_dev_pwd)
         layout_v1.addWidget(label_dev_host)
         layout_v1.addWidget(label_dev_port)
-        layout_v1.addWidget(self.button_connect_devSQL)
-        layout_v1.addWidget(self.button_disconnect_devSQL)
-        layout_v1.addStretch()
 
         layout_v2.addWidget(label_prj_sign)
         layout_v2.addWidget(label_prj_database)
@@ -391,9 +389,37 @@ class TabConnect(QWidget):
         layout_v2.addWidget(label_prj_pwd)
         layout_v2.addWidget(label_prj_host)
         layout_v2.addWidget(label_prj_port)
+
+    def setup_buttons(self, layout_v1, layout_v2):
+        self.button_connect_devSQL = GenFormButton('Подключиться к БД')
+        self.button_connect_devSQL.setToolTip('Подключение к БД разработки')
+        self.button_connect_prjSQL = GenFormButton('Подключиться к БД')
+        self.button_connect_prjSQL.setToolTip('Подключение к БД проекта')
+        self.button_disconnect_devSQL = GenFormButton('Отключиться от БД')
+        self.button_disconnect_prjSQL = GenFormButton('Отключиться от БД')
+
+        self.button_connect_devSQL.clicked.connect(lambda: self.connect_db('dev'))
+        self.button_connect_prjSQL.clicked.connect(lambda: self.connect_db('prj'))
+        self.button_disconnect_devSQL.clicked.connect(lambda: self.disconnect_db('dev'))
+        self.button_disconnect_prjSQL.clicked.connect(lambda: self.disconnect_db('prj'))
+
+        layout_v1.addWidget(self.button_connect_devSQL)
+        layout_v1.addWidget(self.button_disconnect_devSQL)
+        layout_v1.addStretch()
+
         layout_v2.addWidget(self.button_connect_prjSQL)
         layout_v2.addWidget(self.button_disconnect_prjSQL)
         layout_v2.addStretch()
+
+    def setup_new_db(self, layout_v3, layout_h1):
+        label_newBD_1 = ElementSignature('Новый шаблон SQL БД разработки\t')
+        label_newBD_1.label()
+        self.button_newDB = GenFormButton('Создать базу данных')
+        self.button_newDB.setToolTip('''Создается новая БД вместе с пустыми таблицами под определенную систему(МНС, ПТ и тд.).\n
+                                     Название БД берется из файла init_conf.cfg в разделе [SQL] - database''')
+        self.button_newDB.clicked.connect(lambda: self.clicked_newDB())
+        self.checkbox_sys_mns = CheckBox('МНС')
+        self.checkbox_sys_pt = CheckBox('ПТ')
 
         layout_h1.addStretch()
         layout_h1.addWidget(self.checkbox_sys_mns)
@@ -405,91 +431,106 @@ class TabConnect(QWidget):
         layout_v3.addWidget(self.button_newDB)
         layout_v3.addStretch()
 
-        layout_h2.addLayout(layout_v1)
-        layout_h2.addLayout(layout_v2)
-        layout_h2.addLayout(layout_v3)
-        layout_h2.addStretch()
-
-    def connect_devSQL(self):
-        '''Обработка клика по подключению к БД разработки.'''
-        # Флаг подклюбчения к базе разработки
-        if self.parent.connect_SQL_edit.fl_connect_bd:
-            return
-
+    def connect_db(self, db_type):
+        '''Обработка клика по подключению к БД.'''
         try:
-            db.init(str(connect.database).lower(),
-                    user=connect.user,
-                    password=connect.password,
-                    host=connect.host,
-                    port=connect.port)
-            if not self.dop_function.exist_check_db(str(connect.database).lower(),
-                                                    connect.user,
-                                                    connect.password,
-                                                    connect.host,
-                                                    connect.port):
-                raise Exception('Проверь даннные для подключения к БД')
+            if db_type == 'dev':
+                if not hasattr(self, 'db_dev'):   # Проверяем, существует ли экземпляр
+                    self.db_dev = DatabaseManager(
+                        self.logsTextEdit,
+                        db_type='postgresql',
+                        database=str(self.connect.database).lower(),
+                        user=self.connect.user,
+                        password=self.connect.password,
+                        host=self.connect.host,
+                        port=self.connect.port
+                    )
+                    if not self.db_dev.check_database_exists():
+                        raise Exception(f"БД '{self.db_dev.database}' не существует")
 
-            self.logsTextEdit.logs_msg('БД разработки: подключение установлено', 0)
-            self.parent.connect_SQL_edit.setText('Соединение с БД разработки установлено')
-            self.parent.connect_SQL_edit.connect_true()
-            self.parent.connect_SQL_edit.fl_connect_bd = True
+                # Подключение к БД разработки
+                self.db_dev.connect()
+                # Табло снизу - текст + цвет
+                self.parent.connect_SQL_edit.setText('Соединение с БД разработки установлено')
+                self.parent.connect_SQL_edit.connect_true()
+                # self.logsTextEdit.logs_msg('БД разработки: подключение установлено', 0)
+
+            elif db_type == 'prj':
+                if not hasattr(self, 'db_prj'):   # Проверяем, существует ли экземпляр
+                    self.db_prj = DatabaseManager(
+                        self.logsTextEdit,
+                        db_type='postgresql',
+                        database=str(self.connect.database_msg).lower(),
+                        user=self.connect.user_msg,
+                        password=self.connect.password_msg,
+                        host=self.connect.host_msg,
+                        port=self.connect.port_msg
+                    )
+                    if not self.db_prj.check_database_exists():
+                        raise Exception(f"БД '{self.db_prj.database}' не существует")
+                # Подключение к БД проекта
+                self.db_prj.connect()
+                # Табло снизу - текст + цвет
+                self.parent.connect_SQL_prj.setText('Соединение с БД проекта установлено')
+                self.parent.connect_SQL_prj.connect_true()
+                # self.logsTextEdit.logs_msg('БД проекта: подключение установлено', 0)
+
         except (Exception, Error) as error:
-            self.logsTextEdit.logs_msg(f'Ошибка поключения к БД разработки: {error}', 2)
+            self.logsTextEdit.logs_msg(f'БД: ошибка подключения {error}', 2)
 
-    def disconnect_devSQL(self):
-        '''Обработка клика по отключению БД разработки.'''
+    def disconnect_db(self, db_type):
+        '''Обработка клика по отключения БД.'''
         try:
-            db.init(None)
-            self.logsTextEdit.logs_msg('БД разработки: подключение разорвано', 2)
-            self.parent.connect_SQL_edit.setText('Соединение с БД разработки разорвано')
-            self.parent.connect_SQL_edit.connect_false()
-            self.parent.connect_SQL_edit.fl_connect_bd = False
-        except (Exception, Error) as error:
-            self.logsTextEdit.logs_msg(f'Ошибка: {error}', 2)
+            if db_type == 'dev':
+                self.db_dev.disconnect()
 
-    def connect_prjSQL(self):
-        '''Обработка клика по подключению к БД проекта.'''
-        try:
-            db_prj.init(connect.database_msg,
-                        user=connect.user_msg,
-                        password=connect.password_msg,
-                        host=connect.host_msg,
-                        port=connect.port_msg)
+                self.parent.connect_SQL_edit.setText('Соединение с БД разработки разорвано')
+                self.parent.connect_SQL_edit.connect_false()
+                # self.logsTextEdit.logs_msg('БД разработки: подключение разорвано', 2)
 
-            if not self.dop_function.exist_check_db(connect.database_msg,
-                                                    connect.user_msg,
-                                                    connect.password_msg,
-                                                    connect.host_msg,
-                                                    connect.port_msg):
-                raise Exception('Проверь даннные для подключения к БД')
+            elif db_type == 'prj':
+                self.db_prj.disconnect()
 
-            self.logsTextEdit.logs_msg('БД проекта: подключение установлено', 0)
-            self.parent.connect_SQL_prj.setText('Соединение с БД проекта установлено')
-            self.parent.connect_SQL_prj.connect_true()
-        except (Exception, Error) as error:
-            self.logsTextEdit.logs_msg(f'Ошибка поключения к БД проекта: {error}', 2)
+                self.parent.connect_SQL_prj.setText('Соединение с БД проекта разорвано')
+                self.parent.connect_SQL_prj.connect_false()
+                # self.logsTextEdit.logs_msg('БД проекта: подключение разорвано', 2)
 
-    def disconnect_prjSQL(self):
-        '''Обработка клика по отключению БД проекта.'''
-        try:
-            db_prj.init(None)
-            self.logsTextEdit.logs_msg('БД проекта: подключение разорвано', 2)
-            self.parent.connect_SQL_prj.setText('Соединение с БД проекта разорвано')
-            self.parent.connect_SQL_prj.connect_false()
-        except (Exception, Error) as error:
-            self.logsTextEdit.logs_msg(f'Ошибка: {error}', 2)
+        except Exception:
+            self.logsTextEdit.logs_msg('БД: подключение не было установлено', 2)
 
     def clicked_newDB(self):
         '''Выбор системы и создание БД.'''
-        obj_new_db = NewDB()
         if not self.checkbox_sys_mns.isChecked() and not self.checkbox_sys_pt.isChecked():
             self.logsTextEdit.logs_msg('Выбери систему для новой БД!', 3)
+            return
+
+        db_new = DatabaseManager(
+            self.logsTextEdit,
+            db_type='postgresql',
+            database=str(self.connect.database).lower(),
+            user=self.connect.user,
+            password=self.connect.password,
+            host=self.connect.host,
+            port=self.connect.port)
+
+        # Создаем базу данных
+        db_new.create_database(str(self.connect.database).lower())
+        # Устанавливаем базу данных для моделей
+        BaseModel._meta.database = db_new.get_database()
+
+        from manager_db.model_table_db import MNS_LIST, PT_LIST
+        # print(f"База данных для BaseModel: {BaseModel._meta.database}")
+        # for model in MNS_LIST:
+        #     print(f"Модель {model.__name__} использует базу данных: {model._meta.database}")
+
         if self.checkbox_sys_mns.isChecked():
-            obj_new_db.create_new_base('MNS', self.logsTextEdit)
-            self.connect_devSQL()
+            db_new.get_database().create_tables(MNS_LIST)
+
         if self.checkbox_sys_pt.isChecked():
-            obj_new_db.create_new_base('PT', self.logsTextEdit)
-            self.connect_devSQL()
+            db_new.get_database().create_tables(PT_LIST)
+
+        # Подключаемся к базе данных
+        self.connect_db('dev')
 
 
 # Импорт Excel
@@ -774,6 +815,8 @@ class DevSQL(QWidget):
 
         self.logsTextEdit = logtext
         self.dop_function = DopFunction()
+        self.theread = {}
+        self.worker = ThreadClass(self.worker)
 
         layout_h1 = QHBoxLayout()
         layout_h2 = QHBoxLayout()
@@ -808,11 +851,8 @@ class DevSQL(QWidget):
         self.checkbox_pi = CheckBox('PI')
         self.checkbox_pt = CheckBox('PT')
 
-        button_start = GenFormButton('Заполнить таблицу')
-        button_clear = GenFormButton('Очистить таблицу')
-
-        button_start.clicked.connect(self.click_fill_table)
-        button_clear.clicked.connect(self.clear_table)
+        button_start = GenFormButton('Заполнить таблицу', clicked=self.click_fill_table)
+        button_clear = GenFormButton('Очистить таблицу', clicked=self.clear_table)
 
         layout_v1.addWidget(self.checkbox_hw)
         layout_v1.addWidget(self.checkbox_uso)
@@ -891,8 +931,15 @@ class DevSQL(QWidget):
 
     def click_fill_table(self):
         '''Заполнение таблицы БД.'''
-        for param in self.check_attr(): 
-            param[1].work_func()
+        self.worker.start()
+        print('Start')
+
+    def worker(self):
+        # for param in self.check_attr():
+        #     param[1].work_func()
+        for i in range(10):
+            print(i)
+            time.sleep(1)
 
 
 # Заполнение DevStudio
@@ -1275,7 +1322,7 @@ class MainWindow(QMainWindow):
         layout_v.addLayout(layout_h)
 
         self.logsTextEdit.logs_msg('Генератор разработки проекта запущен', 1)
-        db.init(None)
+        # db.init(None)
 
     def edit_tab(self):
         '''Добавление на экран виджетов для запуска окна редактирования.'''
@@ -1284,18 +1331,18 @@ class MainWindow(QMainWindow):
 
     def set_tabs(self):
         self.tab_1 = TabConnect(self.logsTextEdit, self)
-        tab_2 = ImportKD(self.logsTextEdit, self)
-        tab_3 = DevSQL(self.logsTextEdit)
-        tab_4 = TabConnect(self.logsTextEdit)
-        tab_5 = GenHMIandDev(self.logsTextEdit)
-        tab_6 = TabConnect(self.logsTextEdit)
+        #tab_2 = ImportKD(self.logsTextEdit, self)
+        #tab_3 = DevSQL(self.logsTextEdit)
+        #tab_4 = TabConnect(self.logsTextEdit)
+        #tab_5 = GenHMIandDev(self.logsTextEdit)
+        #tab_6 = TabConnect(self.logsTextEdit)
 
         self.tabwidget.addTab(self.tab_1, 'Соединение')
-        self.tabwidget.addTab(tab_2, 'Импорт КЗФКП')
-        self.tabwidget.addTab(tab_3, 'БД разработки')
-        self.tabwidget.addTab(tab_4, 'БД проекта')
-        self.tabwidget.addTab(tab_5, 'ВУ')
-        self.tabwidget.addTab(tab_6, 'СУ')
+        #self.tabwidget.addTab(tab_2, 'Импорт КЗФКП')
+        #self.tabwidget.addTab(tab_3, 'БД разработки')
+        #self.tabwidget.addTab(tab_4, 'БД проекта')
+        #self.tabwidget.addTab(tab_5, 'ВУ')
+        #self.tabwidget.addTab(tab_6, 'СУ')
 
     def bottom_row(self):
         '''Нижний ряд с кнопкой и ииндикацией.'''
@@ -1307,8 +1354,7 @@ class MainWindow(QMainWindow):
         self.connect_SQL_prj.setText('Соединение с БД проекта не установлено')
         self.clear_log = PushButton('Очистить журнал')
         self.clear_log.clicked.connect(self.clear_jornal)
-        self.clear_log.setStyleSheet("""*{
-                                     font:13px times;
+        self.clear_log.setStyleSheet("""*{font:13px times;
                                      background-color: #f0f0f0;
                                      border: 1px solid #a19f9f;
                                      padding: 4px; border-radius: 4}
@@ -1324,12 +1370,13 @@ class MainWindow(QMainWindow):
 class ThreadClass(QThread):
     any_signal = pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, func, parent=None):
         super(ThreadClass, self).__init__(parent)
         self.is_running = True
+        self.func = func
 
     def run(self):
-        self.any_signal.emit()
+        self.func()
 
     def stop(self):
         self.is_running = False
