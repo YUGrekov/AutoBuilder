@@ -60,6 +60,10 @@ class DatabaseManager:
         """
         return self.db
 
+    def get_tables(self):
+        '''Сбор таблиц базы'''
+        return self.db.get_tables()
+
     def is_connected(self) -> bool:
         """
         Проверяет, установлено ли соединение с базой данных.
@@ -163,6 +167,22 @@ class DatabaseManager:
             self.logstext.logs_msg(f"БД: Ошибка при создании базы данных: {e}", 0)
             print(f"Ошибка при создании базы данных: {e}")
 
+    def execute_query_one(self, query: str) -> Optional[list]:
+        """
+        Выполняет SQL-запрос к базе данных.
+
+        :param query: SQL-запрос.
+        :return: Результат выполнения запроса или None в случае ошибки.
+        """
+        try:
+            if not self.is_connected():
+                self.connect()
+            cursor = self.db.execute_sql(query)
+            return cursor.fetchone()
+        except OperationalError as e:
+            print(f"Ошибка выполнения запроса: {e}")
+            return None
+
     def execute_query(self, query: str) -> Optional[list]:
         """
         Выполняет SQL-запрос к базе данных.
@@ -175,6 +195,37 @@ class DatabaseManager:
                 self.connect()
             cursor = self.db.execute_sql(query)
             return cursor.fetchall()
+        except OperationalError as e:
+            print(f"Ошибка выполнения запроса: {e}")
+            return None
+
+    def execute_query_desc(self, query: str) -> Optional[list]:
+        """
+        Выполняет SQL-запрос к базе данных.
+
+        :param query: SQL-запрос.
+        :return: Результат выполнения запроса или None в случае ошибки.
+        """
+        try:
+            if not self.is_connected():
+                self.connect()
+            cursor = self.db.execute_sql(query)
+            return cursor.description
+        except OperationalError as e:
+            print(f"Ошибка выполнения запроса: {e}")
+            return None
+
+    def query_no_return(self, query: str) -> Optional[list]:
+        """
+        Выполняет SQL-запрос к базе данных.
+
+        :param query: SQL-запрос.
+        :return: Результат выполнения запроса или None в случае ошибки.
+        """
+        try:
+            if not self.is_connected():
+                self.connect()
+            self.db.execute_sql(query)
         except OperationalError as e:
             print(f"Ошибка выполнения запроса: {e}")
             return None

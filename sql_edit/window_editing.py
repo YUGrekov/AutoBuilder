@@ -1,30 +1,25 @@
+import re
+import traceback
+from enum import Enum
+from sql_metadata import Parser
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QWidget
-from PyQt5.QtWidgets import QMainWindow
-from PyQt5.QtWidgets import QTableWidget
-from PyQt5.QtWidgets import QPushButton
-from PyQt5.QtWidgets import QComboBox
-from PyQt5.QtWidgets import QLabel
-from PyQt5.QtWidgets import QVBoxLayout
-from PyQt5.QtWidgets import QLineEdit
-from PyQt5.QtWidgets import QGridLayout
-from PyQt5.QtWidgets import QSplitter
-from PyQt5.QtWidgets import QTableWidgetItem
-from PyQt5.QtWidgets import QAbstractItemView
-from PyQt5.QtWidgets import QHeaderView
-from backend_editSQL import Editing_SQL
+from PyQt5.QtWidgets import QWidget, QMainWindow, QTableWidget, QPushButton, QComboBox, QLabel, QVBoxLayout
+from PyQt5.QtWidgets import QLineEdit, QGridLayout, QSplitter, QTableWidgetItem, QAbstractItemView, QHeaderView
+from sql_edit.add_methodse_edit import Editing_SQL
 from connect_log.logging_text import LogsTextEdit
 
-CONST_WIN_SIZE_MAIN_W = 1600
-CONST_WIN_SIZE_MAIN_H = 860
-CONST_WIN_SIZE_TYPETABLE_W = 500
-CONST_WIN_SIZE_TYPETABLE_H = 600
-CONST_WIDTH_BORDER = 5
-CONST_COUNT_ONE = 1
-CONST_CONTEXT_W = 800
-CONST_CONTEXT_H = 675
-CONST_SIZE_SPLITTER = [500, 100]
+
+class ConstSize(Enum):
+    WIN_SIZE_MAIN_W = 1600
+    WIN_SIZE_MAIN_H = 860
+    WIN_SIZE_TYPETABLE_W = 500
+    WIN_SIZE_TYPETABLE_H = 600
+    WIDTH_BORDER = 5
+    COUNT_ONE = 1
+    CONTEXT_W = 800
+    CONTEXT_H = 675
+    SIZE_SPLITTER = [500, 100]
 
 
 USED_TABLE = [('AI', 'ai'), ('AO', 'ao'), ('DI', 'di'), ('DO', 'do'),
@@ -123,14 +118,18 @@ class TableWidget(QTableWidget):
         self.tw_dub = tw_dub
         self.edit_SQL = edit_SQL
         self.logging = logging
+        self.parent = parent
         column, row, hat_name, value, end = self.object_data_table()
 
         self.init_table(column, row, hat_name, value, end)
 
     def object_data_table(self) -> tuple:
         '''Данные из базы SQL для построения таблицы'''
-        column, row, hat_name, value, end = self.edit_SQL.editing_sql(self.table_us)
-        return column, row, hat_name, value, end
+        value = self.parent.db_dev.execute_query(f'SELECT * FROM "{self.table_us}" ORDER BY id')
+        eng_name_column = self.parent.db_dev.execute_query_desc(f'SELECT * FROM "{self.table_us}" ORDER BY id')
+        path_rus_text = self.parent.connect.path_rus_text
+
+        return self.edit_SQL.editing_sql(eng_name_column, value, path_rus_text)
 
     def init_table(self, column: int, row: int,
                    hat_name: list, value: list, end: int):
@@ -193,7 +192,7 @@ class TableWidget(QTableWidget):
         '''Получаем значение ширины 4 колонок'''
         width = 0
         for i in range(4):
-            width += self.columnWidth(i) + CONST_WIDTH_BORDER
+            width += self.columnWidth(i) + ConstSize.WIDTH_BORDER.value
         return width
 
     def tw_clear_lines(self, rowcount: int):
@@ -240,8 +239,19 @@ class TableWidget(QTableWidget):
             item (_type_): элемент qtablewidget
         """
         if value_cell.lower().find(what_looking) != -1:
-            name_signal = self.edit_SQL.search_name(what_looking, value_cell)
-            item.setToolTip(name_signal)
+
+            try:
+                isdigit_num = re.findall('\d+', str(value_cell))
+                value = self.parent.db_dev.execute_query_one(f"""
+                                                            SELECT "name"
+                                                            FROM "{self.table_us}"
+                                                            WHERE id = {int(isdigit_num[0])}""")
+                # fetchone = self.query.where_id_select(self.table_us,
+                #                                     "name",
+                #                                     int(isdigit_num[0]))
+                item.setToolTip(value[0])
+            except Exception:
+                return ''
 
     def click_position(self):
         '''Отработка события при изменении ячейки'''
@@ -254,27 +264,55 @@ class TableWidget(QTableWidget):
             value_id = self.text_cell(row, 0)
         except Exception:
             value = None
-            value_id = None
+            # value_id = None
+            value_id = self.text_cell(row, 0)
         # Переход на нижнюю строку
         if (row + 1) == self.row_count_tabl():
             self.setCurrentCell(row, column)
         else:
             self.setCurrentCell(row + 1, column)
 
-        hat_name, fetchall = self.edit_SQL.column_names(self.table_us)
-        self.edit_SQL.update_row_tabl(column, value, value_id,
-                                      self.table_us, hat_name, self.logging)
+        hat_name = self.parent.db_dev.execute_query_desc(f'SELECT * FROM "{self.table_us}" ORDER BY id')
 
-    def value_change(self, text):
+        active_column = list(hat_name)[column]
+        try:
+            change_value = "NULL" if value is None or value == '' else f'{value}'
+
+            if change_value == 'NULL':
+                string = f'SET "{active_column.name}"= NULL'
+            else:
+                string = f'''SET "{active_column.name}"='{change_value}' '''
+
+            self.parent.db_dev.query_no_return(f"""UPDATE "{self.table_us}" {string} WHERE id={value_id}""")
+
+            return
+        except Exception:
+            self.logging.logs_msg(f'Таблица: {self.table_us}, ошибка при изменении ячейки: {traceback.format_exc()}', 2)
+            return
+
+    def value_change(self, value):
         '''Отработка события при изменении ячейки'''
         row, column = self.data_cell()
         value_id = self.text_cell(row, 0)
-        hat_name, fetchall = self.edit_SQL.column_names(self.table_us)
+        hat_name = self.parent.db_dev.execute_query_desc(f'SELECT * FROM "{self.table_us}" ORDER BY id')
 
-        self.setItem(row, column, QTableWidgetItem(text))
+        self.setItem(row, column, QTableWidgetItem(value))
 
-        self.edit_SQL.update_row_tabl(column, text, value_id,
-                                      self.table_us, hat_name, self.logging)
+        active_column = list(hat_name)[column]
+        try:
+            change_value = "NULL" if value is None or value == '' else f'{value}'
+
+            if change_value == 'NULL':
+                string = f'SET "{active_column.name}"= NULL'
+            else:
+                string = f'''SET "{active_column.name}"= '{change_value}' '''
+
+            self.parent.db_dev.query_no_return(f"""UPDATE "{self.table_us}" {string} WHERE id={value_id}""")
+
+            return
+        except Exception:
+            self.logging.logs_msg(f'Таблица: {self.table_us}, ошибка при изменении ячейки: {traceback.format_exc()}', 2)
+            return
 
     def setColorOldRow(self, row, column):
         '''Закрашиваем предыдущую строку.'''
@@ -393,7 +431,8 @@ class WindowContexMenuSQL(QMainWindow):
         self.setStyleSheet("background-color: #e1e5e5;")
         self.setWindowFlags(Qt.WindowCloseButtonHint)
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
-        self.resize(CONST_CONTEXT_W, CONST_CONTEXT_H)
+        self.resize(ConstSize.CONTEXT_W.value,
+                    ConstSize.CONTEXT_H.value)
 
         self.editSQL = Editing_SQL()
 
@@ -507,7 +546,8 @@ class WindowTypeTableSQL(QMainWindow):
         self.setWindowTitle('Тип столбцов таблицы')
         self.setStyleSheet("background-color: #e1e5e5;")
         self.setWindowFlags(Qt.WindowCloseButtonHint)
-        self.resize(CONST_WIN_SIZE_TYPETABLE_W, CONST_WIN_SIZE_TYPETABLE_H)
+        self.resize(ConstSize.WIN_SIZE_TYPETABLE_W.value,
+                    ConstSize.WIN_SIZE_TYPETABLE_H.value)
 
         self.t_w = QTableWidget(self)
         self.t_w.verticalHeader().setVisible(False)
@@ -533,152 +573,263 @@ class WindowTypeTableSQL(QMainWindow):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, table_used: str):
+    def __init__(self, bd_connect, active_table: str):
         super(MainWindow, self).__init__()
 
+        # Инициализация окна
+        self._init_window()
+        # Инициализация атрибутов
+        self._init_attributes(bd_connect, active_table)
+        # Создание виджетов
+        self._create_widgets()
+        # Настройка событий
+        self._setup_events()
+        # Компоновка интерфейса
+        self._setup_layout()
+        # Логирование запуска
+        self.logsTextEdit.logs_msg('Редактор базы данных запущен', 1)
+        self.logsTextEdit.logs_msg(f'Открыта таблица: {self.table_us}', 0)
+
+    def _init_window(self):
+        """Инициализация основных параметров окна."""
         self.setWindowTitle('Редактор базы данных')
         self.setStyleSheet("background-color: #f0f0f0;")
         self.setWindowFlags(Qt.WindowCloseButtonHint)
-        self.resize(CONST_WIN_SIZE_MAIN_W, CONST_WIN_SIZE_MAIN_H)
+        self.resize(ConstSize.WIN_SIZE_MAIN_W.value,
+                    ConstSize.WIN_SIZE_MAIN_H.value)
 
-        self.editSQL = Editing_SQL()
-        self.table_us = table_used
-        self.table_old = table_used
-        self.old_row_1 = 0
-        self.old_row_2 = 0
+    def _init_attributes(self, bd_connect, active_table):
+        """Инициализация атрибутов класса."""
+        self.bd_manager = bd_connect.tab_1
+        self.table_us = self.table_old = active_table
+        self.editSQL = Editing_SQL(self.table_us)
+        self.old_row_1 = self.old_row_2 = 0
+        self.fl_actives_windows = 0
 
+    def _create_widgets(self):
+        """Создание всех виджетов."""
         self.logsTextEdit = LogsTextEdit(self)
         self.logsTextEdit.setStyleSheet('''
-                                font:13px times;
-                                background-color: #f0f0f0;
-                                border-top-left-radius: 5;
-                                border-top-right-radius: 5;
-                                border-bottom-left-radius: 5;
-                                border-bottom-right-radius: 5;
-                                border: 1px solid #a19f9f;''')
-        self.tableWidget = TableWidget(self.editSQL,
-                                       self.table_us,
-                                       self.logsTextEdit)
-        self.tableWidget_dub = TableWidget(self.editSQL,
-                                           self.table_us,
-                                           self.logsTextEdit,
-                                           True)
+                                        font: 13px times;
+                                        background-color: #f0f0f0;
+                                        border-radius: 5px;
+                                        border: 1px solid #a19f9f;''')
+
+        self.tableWidget = TableWidget(self.editSQL, self.table_us, self.logsTextEdit, False, self.bd_manager)
+        self.tableWidget_dub = TableWidget(self.editSQL, self.table_us, self.logsTextEdit, True, self.bd_manager)
 
         self.centralwidget = QWidget()
         self.setCentralWidget(self.centralwidget)
 
-        self.l_enter_req = LineEdit(self,
-                                    placeholderText='Введите запрос',
-                                    clearButtonEnabled=True)
-        b_addrow = PushButton('Добавить строку', '#92c486')
-        b_delrow = PushButton('Удалить строку', '#eb6574')
-        b_cleartabl = PushButton('Очистить таблицу', '#f0f0f0')
-        b_deltabl = PushButton('Удалить таблицу', '#f0f0f0')
-        b_apply_query = PushButton('Применить запрос', '#92c486')
-        b_reset_query = PushButton('Сбросить запрос', '#f0f0f0')
-        b_type_data = PushButton('Тип данных таблицы', '#92c486')
-        b_links = PushButton('Ссылки', '#faf5cd')
+        self.l_enter_req = LineEdit(self, placeholderText='Введите запрос', clearButtonEnabled=True)
 
-        # Events
-        self.fl_actives_windows = 0
-        b_addrow.clicked.connect(self.add_row)
-        b_delrow.clicked.connect(self.delete_row)
-        b_cleartabl.clicked.connect(self.clear_tabl)
-        b_deltabl.clicked.connect(self.drop_tabl)
-        b_apply_query.clicked.connect(self.apply_query)
-        b_reset_query.clicked.connect(self.reset_query)
-        b_type_data.clicked.connect(self.type_tabl)
-        b_links.clicked.connect(self.link_tabl)
-        self.tableWidget.selectionModel().selectionChanged.connect(self.on_Change_one)
-        self.tableWidget_dub.selectionModel().selectionChanged.connect(self.on_Change_two)
+        # Создание кнопок
+        self.buttons = {
+            'b_addrow': PushButton('Добавить строку', '#92c486'),
+            'b_delrow': PushButton('Удалить строку', '#eb6574'),
+            'b_cleartabl': PushButton('Очистить таблицу', '#f0f0f0'),
+            'b_deltabl': PushButton('Удалить таблицу', '#f0f0f0'),
+            'b_apply_query': PushButton('Применить запрос', '#92c486'),
+            'b_reset_query': PushButton('Сбросить запрос', '#f0f0f0'),
+            'b_type_data': PushButton('Тип данных таблицы', '#92c486'),
+            'b_links': PushButton('Ссылки', '#faf5cd')
+        }
+
+    def _setup_events(self):
+        """Настройка событий для кнопок и виджетов."""
+        self.buttons['b_addrow'].clicked.connect(self.add_row)
+        self.buttons['b_delrow'].clicked.connect(self.delete_row)
+        self.buttons['b_cleartabl'].clicked.connect(self.clear_table)
+        self.buttons['b_deltabl'].clicked.connect(self.drop_table)
+        self.buttons['b_apply_query'].clicked.connect(self.apply_query)
+        self.buttons['b_reset_query'].clicked.connect(self.reset_query)
+        self.buttons['b_type_data'].clicked.connect(self.type_table)
+        self.buttons['b_links'].clicked.connect(self.link_table)
+
+        self.tableWidget.selectionModel().selectionChanged.connect(lambda: self.on_change(1))
+        self.tableWidget_dub.selectionModel().selectionChanged.connect(lambda: self.on_change(2))
         self.tableWidget.verticalScrollBar().valueChanged.connect(self.synh_position)
         self.tableWidget_dub.verticalScrollBar().valueChanged.connect(self.synh_position)
 
-        # Position
+    def _setup_layout(self):
+        """Компоновка интерфейса."""
         self.layout_g = QGridLayout()
-        self.layout_g.addWidget(b_addrow, 0, 0)
-        self.layout_g.addWidget(b_delrow, 1, 0)
-        self.layout_g.addWidget(b_cleartabl, 0, 3)
-        self.layout_g.addWidget(b_deltabl, 1, 3)
-        self.layout_g.addWidget(b_links, 1, 4)
+        self.layout_g.addWidget(self.buttons['b_addrow'], 0, 0)
+        self.layout_g.addWidget(self.buttons['b_delrow'], 1, 0)
+        self.layout_g.addWidget(self.buttons['b_cleartabl'], 0, 3)
+        self.layout_g.addWidget(self.buttons['b_deltabl'], 1, 3)
+        self.layout_g.addWidget(self.buttons['b_links'], 1, 4)
         self.layout_g.addWidget(self.l_enter_req, 0, 5, 1, 3)
-        self.layout_g.addWidget(b_apply_query, 1, 5)
-        self.layout_g.addWidget(b_reset_query, 1, 6)
-        self.layout_g.addWidget(b_type_data, 1, 7)
+        self.layout_g.addWidget(self.buttons['b_apply_query'], 1, 5)
+        self.layout_g.addWidget(self.buttons['b_reset_query'], 1, 6)
+        self.layout_g.addWidget(self.buttons['b_type_data'], 1, 7)
 
         self.splitter_h = QSplitter(Qt.Horizontal)
         self.splitter_h.addWidget(self.tableWidget_dub)
         self.splitter_h.addWidget(self.tableWidget)
         width = self.tableWidget_dub.width_column()
-        self. splitter_h.setSizes([width, CONST_WIN_SIZE_MAIN_W - width])
+        self.splitter_h.setSizes([width, ConstSize.WIN_SIZE_MAIN_W.value - width])
 
         self.splitter_v = QSplitter(Qt.Vertical)
         self.splitter_v.addWidget(self.splitter_h)
         self.splitter_v.addWidget(self.logsTextEdit)
-        self.splitter_v.setSizes(CONST_SIZE_SPLITTER)
+        self.splitter_v.setSizes(ConstSize.SIZE_SPLITTER.value)
 
         self.layout_v = QVBoxLayout(self.centralwidget)
         self.layout_v.addLayout(self.layout_g)
         self.layout_v.addWidget(self.splitter_v)
 
-        self.logsTextEdit.logs_msg('Редактор базы данных запущен', 1)
-        self.logsTextEdit.logs_msg(f'Открыта таблица: {self.table_us}', 0)
+        # self.setWindowTitle('Редактор базы данных')
+        # self.setStyleSheet("background-color: #f0f0f0;")
+        # self.setWindowFlags(Qt.WindowCloseButtonHint)
+        # self.resize(ConstSize.WIN_SIZE_MAIN_W.value,
+        #             ConstSize.WIN_SIZE_MAIN_H.value)
 
-    def on_Change_one(self):
-        '''Активность окна 1 и
-        подкраска строки виджета с левой стороны'''
-        self.fl_actives_windows = 1
-        # Подкраска с левой стороны
-        self.tableWidget_dub.blockSignals(True)
-        self.tableWidget.blockSignals(True)
-        current_row = self.tableWidget.currentRow()
+        # self.bd_manager = bd_connect.tab_1
+        # self.table_us = active_table
+        # self.table_old = active_table
+        # self.editSQL = Editing_SQL(self.table_us)
+        # self.old_row_1 = 0
+        # self.old_row_2 = 0
+
+        # self.logsTextEdit = LogsTextEdit(self)
+        # self.logsTextEdit.setStyleSheet('''
+        #                         font:13px times;
+        #                         background-color: #f0f0f0;
+        #                         border-top-left-radius: 5;
+        #                         border-top-right-radius: 5;
+        #                         border-bottom-left-radius: 5;
+        #                         border-bottom-right-radius: 5;
+        #                         border: 1px solid #a19f9f;''')
+
+        # self.tableWidget = TableWidget(self.editSQL,
+        #                                self.table_us,
+        #                                self.logsTextEdit,
+        #                                False, self.bd_manager)
+        # self.tableWidget_dub = TableWidget(self.editSQL,
+        #                                    self.table_us,
+        #                                    self.logsTextEdit,
+        #                                    True, self.bd_manager)
+
+        # self.centralwidget = QWidget()
+        # self.setCentralWidget(self.centralwidget)
+
+        # self.l_enter_req = LineEdit(self,
+        #                             placeholderText='Введите запрос',
+        #                             clearButtonEnabled=True)
+        # b_addrow = PushButton('Добавить строку', '#92c486')
+        # b_delrow = PushButton('Удалить строку', '#eb6574')
+        # b_cleartabl = PushButton('Очистить таблицу', '#f0f0f0')
+        # b_deltabl = PushButton('Удалить таблицу', '#f0f0f0')
+        # b_apply_query = PushButton('Применить запрос', '#92c486')
+        # b_reset_query = PushButton('Сбросить запрос', '#f0f0f0')
+        # b_type_data = PushButton('Тип данных таблицы', '#92c486')
+        # b_links = PushButton('Ссылки', '#faf5cd')
+
+        # # Events
+        # self.fl_actives_windows = 0
+        # b_addrow.clicked.connect(lambda: self.add_row())
+        # b_delrow.clicked.connect(lambda: self.delete_row())
+        # b_cleartabl.clicked.connect(lambda: self.clear_table())
+        # b_deltabl.clicked.connect(lambda: self.drop_table())
+        # b_apply_query.clicked.connect(lambda: self.apply_query())
+        # b_reset_query.clicked.connect(lambda: self.reset_query())
+        # b_type_data.clicked.connect(lambda: self.type_table())
+        # b_links.clicked.connect(lambda: self.link_table())
+
+        # self.tableWidget.selectionModel().selectionChanged.connect(self.on_Change_one)
+        # self.tableWidget_dub.selectionModel().selectionChanged.connect(self.on_Change_two)
+        # self.tableWidget.verticalScrollBar().valueChanged.connect(self.synh_position)
+        # self.tableWidget_dub.verticalScrollBar().valueChanged.connect(self.synh_position)
+
+        # # Position
+        # self.layout_g = QGridLayout()
+        # self.layout_g.addWidget(b_addrow, 0, 0)
+        # self.layout_g.addWidget(b_delrow, 1, 0)
+        # self.layout_g.addWidget(b_cleartabl, 0, 3)
+        # self.layout_g.addWidget(b_deltabl, 1, 3)
+        # self.layout_g.addWidget(b_links, 1, 4)
+        # self.layout_g.addWidget(self.l_enter_req, 0, 5, 1, 3)
+        # self.layout_g.addWidget(b_apply_query, 1, 5)
+        # self.layout_g.addWidget(b_reset_query, 1, 6)
+        # self.layout_g.addWidget(b_type_data, 1, 7)
+
+        # self.splitter_h = QSplitter(Qt.Horizontal)
+        # self.splitter_h.addWidget(self.tableWidget_dub)
+        # self.splitter_h.addWidget(self.tableWidget)
+        # width = self.tableWidget_dub.width_column()
+        # self. splitter_h.setSizes([width, ConstSize.WIN_SIZE_MAIN_W.value - width])
+
+        # self.splitter_v = QSplitter(Qt.Vertical)
+        # self.splitter_v.addWidget(self.splitter_h)
+        # self.splitter_v.addWidget(self.logsTextEdit)
+        # self.splitter_v.setSizes(ConstSize.SIZE_SPLITTER.value)
+
+        # self.layout_v = QVBoxLayout(self.centralwidget)
+        # self.layout_v.addLayout(self.layout_g)
+        # self.layout_v.addWidget(self.splitter_v)
+
+        # self.logsTextEdit.logs_msg('Редактор базы данных запущен', 1)
+        # self.logsTextEdit.logs_msg(f'Открыта таблица: {self.table_us}', 0)
+
+    def on_change(self, num_active: bool):
+        '''Активность окна 1 и подкраска строки виджета с левой стороны'''
         count_column = self.tableWidget.column_count_tabl()
-        column = self.editSQL.exist_check_int(self.editSQL.read_json(),
-                                              self.table_us)
+        column = self.editSQL.exist_check_int(
+            self.editSQL.read_json(self.bd_manager.connect.path_rus_text),
+            self.table_us)
 
-        self.tableWidget_dub.setColorOldRow(self.old_row_2, column)
-        self.tableWidget.setColorOldRow(self.old_row_2, count_column)
-        self.tableWidget_dub.setColorOldRow(self.old_row_1, column)
-        self.tableWidget.setColorOldRow(self.old_row_1, count_column)
+        if num_active == 1:
+            self.fl_actives_windows = 1
+            # Подкраска с левой стороны
+            self.tableWidget_dub.blockSignals(True)
+            self.tableWidget.blockSignals(True)
+            current_row = self.tableWidget.currentRow()
 
-        self.tableWidget_dub.setColorNewRow(current_row, column)
-        self.tableWidget.setColorNewRow(current_row, count_column)
+            self.tableWidget_dub.setColorOldRow(self.old_row_2, column)
+            self.tableWidget.setColorOldRow(self.old_row_2, count_column)
+            self.tableWidget_dub.setColorOldRow(self.old_row_1, column)
+            self.tableWidget.setColorOldRow(self.old_row_1, count_column)
 
-        self.old_row_2 = self.tableWidget.currentRow()
+            self.tableWidget_dub.setColorNewRow(current_row, column)
+            self.tableWidget.setColorNewRow(current_row, count_column)
+
+            self.old_row_2 = self.tableWidget.currentRow()
+        else:
+            '''Активность окна 2 и подкраска строки виджета с правой стороны.'''
+            self.fl_actives_windows = 2
+            # Подкраска с правой стороны
+            self.tableWidget.blockSignals(True)
+            self.tableWidget_dub.blockSignals(True)
+            current_row = self.tableWidget_dub.currentRow()
+
+            self.tableWidget.setColorOldRow(self.old_row_1, count_column)
+            self.tableWidget_dub.setColorOldRow(self.old_row_1, column)
+            self.tableWidget.setColorOldRow(self.old_row_2, count_column)
+            self.tableWidget_dub.setColorOldRow(self.old_row_2, column)
+
+            self.tableWidget.setColorNewRow(current_row, count_column)
+            self.tableWidget_dub.setColorNewRow(current_row, column)
+
+            self.old_row_1 = self.tableWidget_dub.currentRow()
+
         self.tableWidget_dub.blockSignals(False)
         self.tableWidget.blockSignals(False)
 
-    def on_Change_two(self):
-        '''Активность окна 2 и
-        подкраска строки виджета с правой стороны.'''
-        self.fl_actives_windows = 2
-        # Подкраска с правой стороны
-        self.tableWidget.blockSignals(True)
-        self.tableWidget_dub.blockSignals(True)
-        current_row = self.tableWidget_dub.currentRow()
-        count_column = self.tableWidget.column_count_tabl()
-        column = self.editSQL.exist_check_int(self.editSQL.read_json(),
-                                              self.table_us)
-
-        self.tableWidget.setColorOldRow(self.old_row_1, count_column)
-        self.tableWidget_dub.setColorOldRow(self.old_row_1, column)
-        self.tableWidget.setColorOldRow(self.old_row_2, count_column)
-        self.tableWidget_dub.setColorOldRow(self.old_row_2, column)
-
-        self.tableWidget.setColorNewRow(current_row, count_column)
-        self.tableWidget_dub.setColorNewRow(current_row, column)
-
-        self.old_row_1 = self.tableWidget_dub.currentRow()
-        self.tableWidget_dub.blockSignals(False)
-        self.tableWidget.blockSignals(False)
-
-    def type_tabl(self):
+    def type_table(self):
         '''Запуск нового окна для просмотра типа столбцов.'''
-        type_list = self.editSQL.type_column(self.table_us, self.logsTextEdit)
+        inf_data = self.bd_manager.db_dev.execute_query(f"""
+                                                    SELECT column_name, data_type
+                                                    FROM information_schema.columns
+                                                    WHERE table_schema = 'public' AND
+                                                    table_name = '{self.table_us}'""")
+        path_rus_text = self.bd_manager.connect.path_rus_text
+        type_list = self.editSQL.type_column(inf_data, path_rus_text)
+
         self.type_tabl = WindowTypeTableSQL(type_list)
         self.type_tabl.show()
 
-    def link_tabl(self):
+    def link_table(self):
         '''Создание и запуск нового окна - Ссылки.'''
         self.link_tabl = WindowContexMenuSQL()
         self.link_tabl.initObject(self)
@@ -696,9 +847,9 @@ class MainWindow(QMainWindow):
         value = 0
         if rowcount:
             value = self.tableWidget.text_cell(rowcount - 1, 0)
-        sum_cell = int(value) + CONST_COUNT_ONE
+        sum_cell = int(value) + ConstSize.COUNT_ONE.value
 
-        self.editSQL.add_new_row(self.table_us, sum_cell)
+        self.bd_manager.db_dev.query_no_return(f'''INSERT INTO "{self.table_us}" (id) VALUES ({sum_cell});''')
         self.tableWidget.insertRow(rowcount)
         self.tableWidget.setItem(rowcount, 0, QTableWidgetItem(f'{sum_cell}'))
         self.tableWidget_dub.insertRow(rowcount)
@@ -720,7 +871,8 @@ class MainWindow(QMainWindow):
             value_id = self.tableWidget.text_cell(row, 0)
         else:
             value_id = self.tableWidget_dub.text_cell(row, 0)
-        self.editSQL.delete_row(value_id, self.table_us)
+
+        self.bd_manager.db_dev.query_no_return(f"""DELETE FROM "{self.table_us}" WHERE id={value_id}""")
         self.tableWidget.removeRow(row)
         self.tableWidget.selectionModel().clearCurrentIndex()
         self.tableWidget_dub.removeRow(row)
@@ -728,7 +880,7 @@ class MainWindow(QMainWindow):
 
         self.logsTextEdit.logs_msg(f'Строка {value_id} удалена', 3)
 
-    def clear_tabl(self):
+    def clear_table(self):
         '''Удаления всех данных таблицы, без столбцов.'''
         rowcount = self.tableWidget.row_count_tabl()
         if rowcount == 0:
@@ -738,53 +890,76 @@ class MainWindow(QMainWindow):
             self.tableWidget.removeRow(rowcount)
             self.tableWidget_dub.removeRow(rowcount)
             rowcount -= 1
-        self.editSQL.clear_tabl(self.table_us)
+
+        self.bd_manager.db_dev.query_no_return(f'DELETE FROM "{self.table_us}"')
         self.l_enter_req.clear()
 
         self.logsTextEdit.logs_msg('Таблица полностью очищена', 3)
 
-    def drop_tabl(self):
+    def drop_table(self):
         '''Удаление таблицы из базы данных.'''
-        self.editSQL.drop_tabl(self.table_us)
+        self.bd_manager.db_dev.query_no_return(f'DROP TABLE "{self.table_us}"')
         self.close()
 
     def size_widget(self):
         width = self.tableWidget_dub.width_column()
-        self.splitter_h.setSizes([width, CONST_WIN_SIZE_MAIN_W - width])
-        self.splitter_v.setSizes(CONST_SIZE_SPLITTER)
+        self.splitter_h.setSizes([width, ConstSize.WIN_SIZE_MAIN_W.value - width])
+        self.splitter_v.setSizes(ConstSize.SIZE_SPLITTER.value)
+
+    def column_table(self, table: str, hat_name, query_column):
+        if query_column[0] == '*':
+            column_used = self.bd_manager.db_dev.execute_query_desc(f'SELECT * FROM "{table}" ORDER BY id')
+        else:
+            column_used = hat_name
+        return column_used
 
     def apply_query(self):
-        """Рукописный запрос к базе SQL.
+        """Рукописный запрос к базе SQL."""
 
-        Args:
-            input_query (str): текст запроса
-        """
         rowcount = self.tableWidget.row_count_tabl()
+        request = self.l_enter_req.text()
+
         if not len(self.l_enter_req.text()):
             self.logsTextEdit.logs_msg('Пустой запрос', 2)
             return
-        table_now, column, row, hat_name, value, end = self.editSQL.apply_request_select(self.l_enter_req.text(),
-                                                                                         self.table_us,
-                                                                                         self.logsTextEdit)
-        if column == 'error':
+
+        value = self.bd_manager.db_dev.execute_query(f'''{request}''')
+        hat_name = self.bd_manager.db_dev.execute_query_desc(f'''{request}''')
+
+        query_table = Parser(f'''{request}''').tables
+        query_column = Parser(f'''{request}''').columns
+        name_column = [column[0] for column in hat_name]
+
+        table_used = query_table[0]
+
+        path_rus_text = self.bd_manager.connect.path_rus_text
+
+        dict_rus = self.editSQL.exist_check_array(self.editSQL.read_json(path_rus_text), table_used)
+        russ_name = self.editSQL.russian_name_column(dict_rus, self.column_table(table_used, hat_name, query_column))
+        end = self.editSQL.exist_check_int(self.editSQL.read_json(path_rus_text), table_used)
+
+        count_column = len(name_column)
+        count_row = len(value)
+
+        if count_column == 'error':
             return
 
-        self.table_us = table_now
+        self.table_us = table_used
 
-        self.tableWidget.table_us = table_now
+        self.tableWidget.table_us = table_used
         self.tableWidget.tw_clear_lines(rowcount)
         self.tableWidget.blockSignals(True)
-        self.tableWidget.init_table(column, row, hat_name, value, end)
+        self.tableWidget.init_table(count_column, count_row, russ_name, value, end)
 
-        self.tableWidget_dub.table_us = table_now
+        self.tableWidget_dub.table_us = table_used
         self.tableWidget_dub.tw_clear_lines(rowcount)
         self.tableWidget_dub.blockSignals(True)
 
         end_dub = 0 if not end else end + 1
-        self.tableWidget_dub.init_table(column, row, hat_name, value, end_dub)
+        self.tableWidget_dub.init_table(count_column, count_row, russ_name, value, end_dub)
         self.size_widget()
 
-        self.logsTextEdit.logs_msg(f'Открыта таблица {table_now}', 1)
+        self.logsTextEdit.logs_msg(f'Открыта таблица {table_used}', 1)
 
     def reset_query(self):
         '''Сброс запроса и возврат таблицы к состоянию до запроса.'''

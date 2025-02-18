@@ -20,7 +20,7 @@ from PyQt5.QtWidgets import QLabel
 from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtWidgets import QCheckBox
 from connect_log.logging_text import LogsTextEdit
-# from window_editing import MainWindow as WinEditing
+from sql_edit.window_editing import MainWindow as WinEditing
 from general_functions import General_functions as DopFunction
 # from manager_db.new_db import NewDB
 from base_model import BaseModel
@@ -29,7 +29,7 @@ from manager_db.connect_bd import DatabaseManager
 # from model import db
 # from model import db_prj
 from connect_log.connect_settings import Connect
-# from excel.workingKD import Import_in_SQL
+from excel.workingKD import Import_in_SQL
 # from request_sql import RequestSQL
 # from sql_bd.hardware import HW
 # from sql_bd.diskrets_in import InDiskrets
@@ -251,80 +251,65 @@ class ComboBox(QComboBox):
 # Построение редактора SQL
 class EditWindows(QWidget):
     '''Конструктор класса редактирования окна разработки.'''
-    def __init__(self, logtext, parent=None):
+    def __init__(self, parent=None):
         super(EditWindows, self).__init__(parent)
 
-        self.parent = parent
-        self.logsTextEdit = logtext
-        layout_v = QVBoxLayout(self)
+        self.mainwindow = parent
 
+        self.setup_ui()
+        self.setup_connection()
+
+    def setup_ui(self):
         self.combo_choise_tabl = ComboBox('Обнови список таблиц')
         self.button_connect_1 = GenFormButton('Окно редактора №1')
         self.button_connect_2 = GenFormButton('Окно редактора №2')
         self.button_update = GenFormButton('Обновить список')
-
         self.button_update.setToolTip('Обновление списка таблиц после изменения БД')
 
-        self.button_connect_1.clicked.connect(self.open_window1)
-        self.button_connect_2.clicked.connect(self.open_window2)
-        self.button_update.clicked.connect(self.update_list)
-
+        layout_v = QVBoxLayout(self)
         layout_v.addWidget(self.combo_choise_tabl)
         layout_v.addWidget(self.button_connect_1)
         layout_v.addWidget(self.button_connect_2)
         layout_v.addStretch()
         layout_v.addWidget(self.button_update)
 
-    def open_window1(self):
-        '''Выполнение по клику кнопки.
-        Открытие окна редактирования БД 1.'''
+    def setup_connection(self):
+        self.button_connect_1.clicked.connect(lambda: self.open_window(1))
+        self.button_connect_2.clicked.connect(lambda: self.open_window(2))
+        self.button_update.clicked.connect(lambda: self.update_list())
+
+    def open_window(self, num_window: int):
+        '''Открытие окна редактирования.'''
         name_table = self.combo_choise_tabl.currentText()
 
-        if name_table == 'Выбери таблицу':
-            self.logsTextEdit.logs_msg('Не выбрана таблица для открытия окна для редактирования базы данных!', 2)
+        if name_table in ('Выбери таблицу', 'Обнови список таблиц'):
+            self.mainwindow.logsTextEdit.logs_msg('Не выбрана таблица для редактирования БД', 2)
             return
-        try:
-            self.open_w1 = WinEditing(name_table)
-            self.open_w1.show()
-            self.logsTextEdit.logs_msg(f'''Открыто окно для редактирования базы данных №1.\n
-                                        Таблица: {name_table}''', 1)
-        except Exception:
-            self.logsTextEdit.logs_msg('''Невозможно подключиться к таблице.
-                                       Нет подключения к БД разработки''', 2)
 
-    def open_window2(self):
-        '''Выполнение по клику кнопки.
-        Открытие окна редактирования БД 2.'''
-        name_table = self.combo_choise_tabl.currentText()
-
-        if name_table == 'Выбери таблицу':
-            self.logsTextEdit.logs_msg('Не выбрана таблица для открытия окна для редактирования базы данных!', 2)
-            return
-        try:
-            self.open_w2 = WinEditing(name_table)
-            self.open_w2.show()
-            self.logsTextEdit.logs_msg(f'''Открыто окно для редактирования базы данных №2.\n
-                                        Таблица: {name_table}''', 1)
-        except Exception:
-            self.logsTextEdit.logs_msg('''Невозможно подключиться к таблице.
-                                       Нет подключения к БД разработки''', 2)
+        if num_window == 1:
+            self.window_1 = WinEditing(self.mainwindow, name_table)
+            self.window_1.show()
+        else:
+            self.window_2 = WinEditing(self.mainwindow, name_table)
+            self.window_2.show()
+        self.mainwindow.logsTextEdit.logs_msg(f'''Открыт редактор БД №{num_window}. Таблица: {name_table}''', 1)
 
     def update_list(self):
         '''Функция обновляет список таблиц по команде.'''
         try:
-            self.parent.tab_1.connect_devSQL()
+            self.mainwindow.tab_1.connect_db('dev')
         except Exception:
-            self.logsTextEdit.logs_msg('''Невозможно обновить список.
-                                       Нет подключения к БД разработки''', 2)
+            self.mainwindow.logsTextEdit.logs_msg('''Невозможно обновить список.
+                                                  Нет подключения к БД разработки''', 2)
             self.combo_choise_tabl.clear()
             self.combo_choise_tabl.addItem('Выбери таблицу')
             return
 
-        list_table = db.get_tables()
+        list_table = self.mainwindow.tab_1.db_dev.get_tables()
         self.combo_choise_tabl.clear()
         for table in list_table:
             self.combo_choise_tabl.addItem(str(table))
-        self.logsTextEdit.logs_msg('Список таблиц обновлен', 1)
+        self.mainwindow.logsTextEdit.logs_msg('Список таблиц обновлен', 1)
 
 
 # Главная страница. Подключение к БД
@@ -335,7 +320,6 @@ class TabConnect(QWidget):
 
         self.logsTextEdit = logtext
         self.parent = parent
-        self.dop_function = DopFunction()
         self.connect = Connect()
 
         self.setup_ui()
@@ -445,6 +429,7 @@ class TabConnect(QWidget):
                         host=self.connect.host,
                         port=self.connect.port
                     )
+
                     if not self.db_dev.check_database_exists():
                         raise Exception(f"БД '{self.db_dev.database}' не существует")
 
@@ -453,7 +438,6 @@ class TabConnect(QWidget):
                 # Табло снизу - текст + цвет
                 self.parent.connect_SQL_edit.setText('Соединение с БД разработки установлено')
                 self.parent.connect_SQL_edit.connect_true()
-                # self.logsTextEdit.logs_msg('БД разработки: подключение установлено', 0)
 
             elif db_type == 'prj':
                 if not hasattr(self, 'db_prj'):   # Проверяем, существует ли экземпляр
@@ -473,7 +457,6 @@ class TabConnect(QWidget):
                 # Табло снизу - текст + цвет
                 self.parent.connect_SQL_prj.setText('Соединение с БД проекта установлено')
                 self.parent.connect_SQL_prj.connect_true()
-                # self.logsTextEdit.logs_msg('БД проекта: подключение установлено', 0)
 
         except (Exception, Error) as error:
             self.logsTextEdit.logs_msg(f'БД: ошибка подключения {error}', 2)
@@ -536,12 +519,11 @@ class TabConnect(QWidget):
 # Импорт Excel
 class ImportKD(QWidget):
     '''Проверка и подключение к БД.'''
-    def __init__(self, logtext, parent=None):
+    def __init__(self, parent=None):
         super(ImportKD, self).__init__(parent)
 
-        self.logsTextEdit = logtext
-        self.parent = parent
-        self.dop_function = DopFunction()
+        self.mainwindow = parent
+        self.logs_msg = self.mainwindow.logsTextEdit.logs_msg
         self.fl_connect = False
         self.fl_load_hat = False
 
@@ -556,6 +538,7 @@ class ImportKD(QWidget):
                                             min-height: 18; padding: 4px; border-radius: 4}
                                             *:hover{background:#e0e0e0; color:'black'}
                                             *:pressed{background: '#e0e0e0'}""")
+        button_new_table = GenFormButton('Создать таблицу')
         button_clear_table = GenFormButton('Очистить таблицу')
         button_add_signals = GenFormButton('Добавить новые сигналы')
         button_update_signals = GenFormButton('Обновить сигналы')
@@ -563,7 +546,8 @@ class ImportKD(QWidget):
         button_connectKD.clicked.connect(self.connectKD)
         button_disconnectKD.clicked.connect(self.disconnectKD)
         button_read_table.clicked.connect(self.read_table)
-        button_clear_table.clicked.connect(self.clear_table)
+        button_new_table.clicked.connect(lambda: self.work_table())
+        button_clear_table.clicked.connect(lambda: self.work_table(True))
         button_add_signals.clicked.connect(self.add_new_signals)
         button_update_signals.clicked.connect(self.update_signals)
 
@@ -610,7 +594,8 @@ class ImportKD(QWidget):
 
         layout_v0.addWidget(button_connectKD)
         layout_v0.addWidget(button_disconnectKD)
-        layout_v0.addSpacing(107)
+        layout_v0.addSpacing(95)
+        layout_v0.addWidget(button_new_table)
         layout_v0.addWidget(button_clear_table)
         layout_v0.addStretch()
 
@@ -668,48 +653,47 @@ class ImportKD(QWidget):
                 raise
             self.connectKD.disconnect_exel()
         except Exception:
-            self.logsTextEdit.logs_msg('''Импорт КД: соединение уже было разорвано''', 3)
+            self.logs_msg('''Импорт КД: соединение уже было разорвано''', 3)
             return
 
         self.fl_connect = False
-        self.parent.connect_exel.connect_false()
-        self.parent.connect_exel.setText('''Соединение с Exel разорвано''')
-        self.logsTextEdit.logs_msg('Импорт КД: соединение c Exel разорвано', 2)
+        self.mainwindow.connect_exel.connect_false()
+        self.mainwindow.connect_exel.setText('''Соединение с Exel разорвано''')
+        self.logs_msg('Импорт КД: соединение c Exel разорвано', 2)
 
     def connectKD(self):
         '''Подключение к файлу КД(КЗФКП) формата Exel.'''
         try:
-            self.connectKD = Import_in_SQL(connect.path_to_exel,
-                                           self.logsTextEdit)
+            self.mainwindow.tab_1.connect_db('dev')
+            self.connectKD = Import_in_SQL(self.mainwindow)
+
             hat_table = self.connectKD.read_table()
             self.combo_choise_tabl.clear()
             self.combo_choise_tabl.addItems(hat_table)
-            self.logsTextEdit.logs_msg('''Импорт КД:
-                                       соединение c Exel установлено''', 0)
-            self.logsTextEdit.logs_msg('Импорт КД: названия шкафов обновлены', 0)
-            self.parent.connect_exel.connect_true()
-            self.parent.connect_exel.setText('''Соединение с Exel установлено''')
+            self.logs_msg('''Импорт КД: соединение c Exel установлено''', 0)
+            self.logs_msg('Импорт КД: названия шкафов обновлены', 0)
+
+            self.mainwindow.connect_exel.connect_true()
+            self.mainwindow.connect_exel.setText('''Соединение с Exel установлено''')
             self.fl_connect = True
         except Exception:
-            self.logsTextEdit.logs_msg(f'''Импорт КД:
-                                       ошибка поключения к файлу КД
-                                       {traceback.format_exc()}''', 2)
+            self.logs_msg(f'''Импорт КД: ошибка поключения к файлу КД {traceback.format_exc()}''', 2)
 
     def read_table(self):
         '''Чтение шапки таблицы для определения позиции столбцов.'''
         name_uso = self.combo_choise_tabl.currentText()
         if not self.fl_connect:
-            self.logsTextEdit.logs_msg('''Импорт КД: нет подключения к файлу Exel''', 2)
+            self.logs_msg('''Импорт КД: нет подключения к файлу Exel''', 2)
             return
         try:
             row = "".join(self.select_row.text().split())
-            self.logsTextEdit.logs_msg(f'''Импорт КД: выбрано УСО: {name_uso}, номер строки: {int(row)}''', 1)
+            self.logs_msg(f'''Импорт КД: выбрано УСО: {name_uso}, номер строки: {int(row)}''', 1)
             self.fl_load_hat = True
         except Exception:
-            self.logsTextEdit.logs_msg('''Импорт КД: некорректный номер строки''', 2)
+            self.logs_msg('''Импорт КД: некорректный номер строки''', 2)
             return
 
-        self.fill_combobox(self.connectKD.read_hat_table(name_uso, row, False))
+        self.fill_combobox(self.connectKD.read_hat_table(name_uso, int(row), False))
 
     def fill_combobox(self, hat_table: dict):
         '''Заполняем названиями столбцы для верного импорта сигналов.'''
@@ -734,30 +718,17 @@ class ImportKD(QWidget):
                 count_index += 1
 
         if count_all == len(list_combobox):
-            self.logsTextEdit.logs_msg(f'''Импорт КД: заголовок нужного столбца найден в УСО: {name_uso}''', 0)
+            self.logs_msg(f'''Импорт КД: заголовок нужного столбца найден в УСО: {name_uso}''', 0)
         else:
-            self.logsTextEdit.logs_msg(f'''Импорт КД: заголовок нужного столбца
-                                       не найден в УСО: {name_uso}. Укажите вручную!''', 2)
+            self.logs_msg(f'''Импорт КД: заголовок нужного столбца
+                          не найден в УСО: {name_uso}. Укажите вручную!''', 2)
 
-    def clear_table(self):
-        '''Полная очистка(не удаление) таблицы Signals.'''
-        try:
-            reqsql = RequestSQL()
-        except Exception:
-            self.logsTextEdit.logs_msg('''Импорт КД:
-                                       невозможно обновить список.
-                                       Нет подключения к БД разработки''', 2)
+    def work_table(self, clear: bool = False):
+        '''Если таблица Signals отсутствует, создаем новую.'''
+        if self.fl_connect is False:
+            self.logs_msg('Импорт КД: сначала подключись к Excel', 2)
             return
-
-        list_tabl = reqsql.get_tabl()
-        check_table = self.dop_function.check_in_table('signals', list_tabl)
-        if check_table:
-            reqsql.clear_table('signals')
-            self.logsTextEdit.logs_msg('Импорт КД: таблица signals очищена', 1)
-        else:
-            reqsql.new_table(Signals)
-            self.logsTextEdit.logs_msg('''Импорт КД:
-                                       таблица signals создана в БД''', 1)
+        self.connectKD.work_table(clear)
 
     def hat_list(self):
         dict_column = {'type_signal': self.combo_type.currentText(),
@@ -775,7 +746,7 @@ class ImportKD(QWidget):
     def add_new_signals(self):
         '''Добавление нового шкафа с сигналами.'''
         if not self.fl_load_hat:
-            self.logsTextEdit.logs_msg('''Импорт КД: необходимо подключиться к таблице''', 2)
+            self.logs_msg('''Импорт КД: необходимо подключиться к таблице''', 2)
             return
         name_uso = self.combo_choise_tabl.currentText()
         try:
@@ -785,14 +756,13 @@ class ImportKD(QWidget):
             self.connectKD.database_entry_SQL(data_uso, name_uso)
 
         except Exception:
-            self.logsTextEdit.logs_msg(f'''Импорт КД: ошибка {traceback.format_exc()}''', 2)
+            self.logs_msg(f'''Импорт КД: ошибка {traceback.format_exc()}''', 2)
             return
 
     def update_signals(self):
         '''Обновление сигналов у выбранного шкафа.'''
         if not self.fl_load_hat:
-            self.logsTextEdit.logs_msg('''Импорт КД:
-                                       необходимо подключиться к таблице''', 2)
+            self.logs_msg('''Импорт КД: необходимо подключиться к таблице''', 2)
             return
         name_uso = self.combo_choise_tabl.currentText()
         try:
@@ -802,8 +772,7 @@ class ImportKD(QWidget):
             self.connectKD.row_update_SQL(data_uso, name_uso)
 
         except Exception:
-            self.logsTextEdit.logs_msg(f'''Импорт КД:
-                                       ошибка {traceback.format_exc()}''', 2)
+            self.logs_msg(f'''Импорт КД: ошибка {traceback.format_exc()}''', 2)
             return
 
 
@@ -1326,23 +1295,23 @@ class MainWindow(QMainWindow):
 
     def edit_tab(self):
         '''Добавление на экран виджетов для запуска окна редактирования.'''
-        tab_1 = EditWindows(self.logsTextEdit, self)
-        self.edit_window.addTab(tab_1, 'Окно редактирования БД SQL')
+        self.windows_edit = EditWindows(self)
+        self.edit_window.addTab(self.windows_edit, 'Окно редактирования БД SQL')
 
     def set_tabs(self):
         self.tab_1 = TabConnect(self.logsTextEdit, self)
-        #tab_2 = ImportKD(self.logsTextEdit, self)
-        #tab_3 = DevSQL(self.logsTextEdit)
-        #tab_4 = TabConnect(self.logsTextEdit)
-        #tab_5 = GenHMIandDev(self.logsTextEdit)
-        #tab_6 = TabConnect(self.logsTextEdit)
+        tab_2 = ImportKD(self)
+        # tab_3 = DevSQL(self.logsTextEdit)
+        # tab_4 = TabConnect(self.logsTextEdit)
+        # tab_5 = GenHMIandDev(self.logsTextEdit)
+        # tab_6 = TabConnect(self.logsTextEdit)
 
         self.tabwidget.addTab(self.tab_1, 'Соединение')
-        #self.tabwidget.addTab(tab_2, 'Импорт КЗФКП')
-        #self.tabwidget.addTab(tab_3, 'БД разработки')
-        #self.tabwidget.addTab(tab_4, 'БД проекта')
-        #self.tabwidget.addTab(tab_5, 'ВУ')
-        #self.tabwidget.addTab(tab_6, 'СУ')
+        self.tabwidget.addTab(tab_2, 'Импорт КЗФКП')
+        # self.tabwidget.addTab(tab_3, 'БД разработки')
+        # self.tabwidget.addTab(tab_4, 'БД проекта')
+        # self.tabwidget.addTab(tab_5, 'ВУ')
+        # self.tabwidget.addTab(tab_6, 'СУ')
 
     def bottom_row(self):
         '''Нижний ряд с кнопкой и ииндикацией.'''

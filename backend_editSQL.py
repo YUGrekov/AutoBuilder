@@ -58,6 +58,7 @@ class Editing_SQL():
         '''Поиск подписи к ячейке.'''
         try:
             isdigit_num = re.findall('\d+', str(value))
+            
             fetchone = self.query.where_id_select(table,
                                                   "name",
                                                   int(isdigit_num[0]))

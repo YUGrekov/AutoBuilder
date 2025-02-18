@@ -1,7 +1,6 @@
 import re
 import openpyxl as wb
-from model import db
-from model import Signals
+from base_model import BaseModel
 from datetime import datetime
 from general_functions import General_functions as GF
 from enum import Enum
@@ -24,18 +23,21 @@ class NameColumn(Enum):
     CONTACT = 'contact'
     BASKET = 'basket'
     MODULE = 'module'
-    CHANNEl = 'channel'
+    CHANNEL = 'channel'
 
 
-class DataExel():
-    '''Инициализация файла Exel и его таблиц.
-    выдача массива для записи в базу SQL'''
-    def __init__(self, exel: str, logtext):
-        self.exel = exel
-        self.logsTextEdit = logtext
-        self.connect = wb.load_workbook(self.exel,
+class DataExel:
+    '''Инициализация файла Exel и его таблиц. Выдача массива для записи в базу SQL.'''
+    def __init__(self, mainwindow):
+
+        self.m_window = mainwindow
+        self.db = self.m_window.tab_1.db_dev.get_database()
+        self.logs_msg = self.m_window.logsTextEdit.logs_msg
+
+        self.connect = wb.load_workbook(self.m_window.tab_1.connect.path_to_exel,
                                         read_only=True,
                                         data_only=True)
+        BaseModel._meta.database = self.db
 
     def disconnect_exel(self):
         '''Разрыв связи с Exel.'''
@@ -46,11 +48,7 @@ class DataExel():
         return [sheet.title for sheet in self.connect.worksheets]
 
     def max_column(self, uso: str):
-        """Читаем выбранную таблицу и получаем макс-ное кол-во столбцов.
-
-        Args:
-            uso (str): название шкафа
-        """
+        """Читаем выбранную таблицу и получаем макс-ное кол-во столбцов."""
         self.sheet = self.connect[uso]
         return self.sheet.max_column
 
@@ -58,25 +56,14 @@ class DataExel():
         '''Чтение ячейки таблицы Exel.'''
         return self.sheet.cell(row=row, column=column).value
 
-    def read_hat_table(self, uso: str, number_row: int,
+    def read_hat_table(self,
+                       uso: str,
+                       number_row: int,
                        is_tuple: bool,
                        select_column: tuple = None) -> dict | tuple:
-        """Список с названиями столбцов.
-        Args:
-            uso (str): название шкафа
-            number_row (int): номер строки с с названиями столбцов
-            is_tuple (bool): флаг использования массива tuple
-            select_column (tuple, optional): выбранные столбцы с
-                                            номерами позиций.
-        Returns:
-            dict|tuple: либо то либо то
-        """
+        """Список с названиями столбцов."""
         column = self.max_column(uso)
-
-        if is_tuple:
-            hat_tabl = {}
-        else:
-            hat_tabl = []
+        hat_tabl = {} if is_tuple else []
 
         for i in range(int(number_row), int(number_row) + SHIFT):
             for j in range(1, column + SHIFT):
@@ -94,12 +81,9 @@ class DataExel():
         return hat_tabl
 
     def database_count_row(self):
-        '''Вычисляем кол-во строк в таблице Signals в базе SQL.
-        Для дальнейшего добавления сигналов в конец таблицы'''
-        cursor = db.cursor()
+        '''Вычисляем кол-во строк в таблице Signals в базе SQL.'''
         try:
-            cursor.execute('''SELECT COUNT(*) FROM signals''')
-            count_row = cursor.fetchall()[0][0]
+            count_row = self.m_window.tab_1.db_dev.execute_query('SELECT COUNT(*) FROM signals')[0][0]
         except Exception:
             count_row = 0
         return count_row
@@ -107,9 +91,8 @@ class DataExel():
     def search_type(self, scheme, type_signal):
         '''Дополнительная проверка на тип сигнала.'''
         for value in LIST_MODULE:
-            if str(scheme).find(value) != -1:
-                type_signal = value
-                return type_signal
+            if value in str(scheme):
+                return value
         return type_signal
 
     def sub_str(self, uso, basket, module, channel):
@@ -120,8 +103,7 @@ class DataExel():
         tag = re.sub(r'\(|\.', '_', tag)
         tag = dop_func.translate(tag)
         tag = tag.replace(' ', '')
-        tag = f'REZ{tag}_{basket}_{module}_{channel}'
-        return tag
+        return f'REZ{tag}_{basket}_{module}_{channel}'
 
     def preparation_import(self, uso: str, number_row: int,
                            select_col: tuple) -> list:
@@ -141,7 +123,7 @@ class DataExel():
             contact = row[tuple_name[NameColumn.CONTACT.value]].value
             basket = row[tuple_name[NameColumn.BASKET.value]].value
             module = row[tuple_name[NameColumn.MODULE.value]].value
-            channel = row[tuple_name[NameColumn.CHANNEl.value]].value
+            channel = row[tuple_name[NameColumn.CHANNEL.value]].value
 
             try:
                 if (basket or module or channel) is None:
@@ -150,9 +132,6 @@ class DataExel():
 
                 if contact is not None:
                     contact = str(contact).replace('.', ',')
-
-                # if name is not None:
-                #    name = name.replace('.', ',')
 
                 if tag is None:
                     if schema is not None or type_s is not None:
@@ -173,7 +152,7 @@ class DataExel():
                                  module=module,
                                  channel=channel))
             except Exception:
-                self.logsTextEdit.logs_msg(f'''Импорт КЗФКП. Таблица: signals, class: DataExel, preparation_import -
+                self.m_window.logsTextEdit.logs_msg(f'''Импорт КЗФКП. Таблица: signals, class: DataExel, preparation_import -
                                         Пропуск строки {basket}, {module}, {channel}: {traceback.format_exc()}''', 2)
                 continue
         return data
@@ -181,44 +160,25 @@ class DataExel():
 
 class Import_in_SQL(DataExel):
     '''Запись и обновление сигналов в базе SQL.'''
-    def exists_signals(self, row: object, uso: str):
-        '''Проверяем существование сигнала в базе
-        по корзине, модулю, каналу.'''
-        exist_row = Signals.select().where(Signals.uso == uso,
-                                           Signals.basket == str(row[NameColumn.BASKET.value]),
-                                           Signals.module == str(row[NameColumn.MODULE.value]),
-                                           Signals.channel == str(row[NameColumn.CHANNEl.value]))
-        return exist_row
+    def exists_signals(self, row: dict, uso: str):
+        '''Проверяем существование сигнала в базе по корзине, модулю, каналу.'''
+        from model import Signals
+        return Signals.select().where(Signals.uso == uso,
+                                      Signals.basket == str(row[NameColumn.BASKET.value]),
+                                      Signals.module == str(row[NameColumn.MODULE.value]),
+                                      Signals.channel == str(row[NameColumn.CHANNEL.value]))
 
     def compare_row(self, row_exel: dict, msg: str,
                     object_sql: object, object_exel: str) -> str:
-        """Сравнение значений строки из базы SQL и таблицы Exel.
-
-        Args:
-            row_exel (dict): строка сигнала из Exel
-            msg (str): сообщении о событии
-            object_sql (object): запрос из базы SQL
-            object_exel (str): имя столбца Exel
-
-        Returns:
-            str: сообщение
-        """
+        """Сравнение значений строки из базы SQL и таблицы Exel."""
         if str(object_sql) != str(row_exel[object_exel]):
-            msg = f'{msg}{object_exel}: {row_exel[object_exel]}({object_sql}),'
-
+            return f'{msg}{object_exel}: {row_exel[object_exel]}({object_sql}),'
         return msg
 
     def record_row(self, row_exel: dict, req_sql: object) -> str:
-        """Обновление значения в строке сигнала.
-        Формирование корректного сообщения об изменении.
+        """Обновление значения в строке сигнала."""
+        from model import Signals
 
-        Args:
-            row_exel (dict): строка сигнала из Exel
-            req_sql (object): запрос из базы SQl
-
-        Returns:
-            str: cсообщение
-        """
         dop_msg = ''
         for row in req_sql:
             dop_msg = self.compare_row(row_exel, dop_msg, row.tag,
@@ -239,47 +199,55 @@ class Import_in_SQL(DataExel):
                                   NameColumn.CONTACT.value: row_exel[NameColumn.CONTACT.value]}).where(
                     Signals.id == row.id).execute()
 
-                self.logsTextEdit.logs_msg(f'''Импорт КД:
-                                           name = {row_exel[NameColumn.NAME.value]},
-                                           id = {row.id}, {dop_msg} сигнал обновлен''', 0)
+                self.logs_msg(f'''Импорт КД:
+                              name = {row_exel[NameColumn.NAME.value]},
+                              id = {row.id}, {dop_msg} сигнал обновлен''', 0)
 
-    def database_entry_SQL(self, data: dict, uso: str):
-        '''По кнопке добавить новое УСО.
-        Запись новых строк в базу SQL.'''
-        with db.atomic():
+    def work_table(self, clear: bool = False):
+        '''Создание или очищение таблицы Signals.'''
+        from model import Signals
+        try:
+            if 'signals' not in self.db.get_tables():
+                if not clear:
+                    self.db.create_tables([Signals])
+                    self.logs_msg('Импорт КД: таблица signals создана', 1)
+                else:
+                    self.logs_msg('Импорт КД: таблица signals отсутствует', 2)
+            else:
+                if clear:
+                    Signals.delete().execute()
+                    self.logs_msg('Импорт КД: таблица signals пустая', 3)
+                else:
+                    self.logs_msg('Импорт КД: таблица signals уже была создана', 1)
+        except Exception:
+            self.logs_msg(f'Импорт КД: ошибка импорта {traceback.format_exc()}', 2)
+
+    def database_entry_SQL(self, data: list, uso: str):
+        '''Запись новых строк в базу SQL.'''
+        from model import Signals
+        with self.db.atomic():
             try:
                 Signals.insert_many(data).execute()
-                self.logsTextEdit.logs_msg(f'''Импорт КД: в таблицу signals
-                                           добавлено новое УСО {uso}''', 1)
+                self.logs_msg(f'Импорт КД: в таблицу signals добавлено новое УСО {uso}', 1)
             except Exception:
-                self.logsTextEdit.logs_msg(f'''Импорт КД: ошибка импорта
-                                           {traceback.format_exc()}''', 2)
+                self.logs_msg(f'Импорт КД: ошибка импорта {traceback.format_exc()}', 2)
 
-    def row_update_SQL(self, data: dict, uso: str):
-        '''По кнопке обновить данные.
-        Обновление старой записи, если имеется или запись новой строки.'''
-        with db.atomic():
+    def row_update_SQL(self, data: list, uso: str):
+        '''Обновление старой записи, если имеется или запись новой строки.'''
+        from model import Signals
+        with self.db.atomic():
             try:
                 for row_exel in data:
-
                     exists_s = self.exists_signals(row_exel, uso)
-
-                    if not bool(exists_s):
-
+                    if not exists_s:
                         Signals.create(**row_exel)
-                        self.logsTextEdit.logs_msg(f'''Импорт КД:
-                                          добавлен новый сигнал:
-                                          id - {row_exel[NameColumn.ID.value]},
-                                          description - {row_exel[NameColumn.NAME.value]},
-                                          module - {row_exel[NameColumn.MODULE.value]},
-                                          channel - {row_exel[NameColumn.CHANNEl.value]}''', 0)
-                        continue
+                        self.logs_msg(f'''Импорт КД: добавлен новый сигнал:
+                                      id - {row_exel[NameColumn.ID.value]},
+                                      description - {row_exel[NameColumn.NAME.value]},
+                                      module - {row_exel[NameColumn.MODULE.value]},
+                                      channel - {row_exel[NameColumn.CHANNEL.value]}''', 0)
                     else:
-                        messages = self.record_row(row_exel, exists_s)
-                        if messages is not None:
-                            self.logsTextEdit.logs_msg(messages, 3)
+                        self.record_row(row_exel, exists_s)
             except Exception:
-                self.logsTextEdit.logs_msg(f'''Импорт КД:
-                                           ошибка импорта
-                                           {traceback.format_exc()}''', 2)
-        self.logsTextEdit.logs_msg('Импорт КД: обновление завершен', 0)
+                self.logs_msg(f'Импорт КД: ошибка импорта {traceback.format_exc()}', 2)
+        self.logs_msg('Импорт КД: обновление завершено', 0)
