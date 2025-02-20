@@ -1,15 +1,11 @@
 import re
 import openpyxl as wb
 from base_model import BaseModel
-from datetime import datetime
-from general_functions import General_functions as GF
 from enum import Enum
 import traceback
 
 SHIFT = 1
 LIST_MODULE = ['CPU', 'PSU', 'CN', 'MN', 'AI', 'AO', 'DI', 'RS', 'DO']
-
-today = datetime.now()
 
 
 class NameColumn(Enum):
@@ -90,20 +86,35 @@ class DataExel:
 
     def search_type(self, scheme, type_signal):
         '''Дополнительная проверка на тип сигнала.'''
-        for value in LIST_MODULE:
-            if value in str(scheme):
-                return value
-        return type_signal
+        return next((value for value in LIST_MODULE if value in str(scheme)), type_signal)
+        # for value in LIST_MODULE:
+        #     if value in str(scheme):
+        #         return value
+        # return type_signal
 
     def sub_str(self, uso, basket, module, channel):
         '''Добавляем теги к резервам.'''
-        dop_func = GF()
-        tag = re.sub(r'(МНС)|(ПТ)|(САР)|(РП)|(с БРУ)|(c БРУ)|\)', '', uso)
-        tag = re.sub(r'(УСО)', 'USO', tag)
-        tag = re.sub(r'\(|\.', '_', tag)
-        tag = dop_func.translate(tag)
-        tag = tag.replace(' ', '')
-        return f'REZ{tag}_{basket}_{module}_{channel}'
+        patterns = {
+            r"МНС": "",
+            r"ПТ": "",
+            r"САР": "",
+            r"РП": "",
+            r"КЦ": "KC",
+            r"с БРУ": "BRU",
+            r"БРУ": "BRU",
+            r"УСО": "USO"}
+
+        tag = uso
+        for pattern, replacement in patterns.items():
+            if pattern in uso:
+                tag = re.sub(pattern, replacement, tag, flags=re.IGNORECASE)
+
+        # Убираем лишние символы (точки, скобки, пробелы) и добавляем префикс REZ_
+        tag = re.sub(r"[\.\s\(\)]", "_", tag)  # Заменяем точки, пробелы, скобки на "_"
+        tag = re.sub(r"_+", "_", tag)  # Убираем дублирующиеся "_"
+        tag = tag.strip("_")  # Убираем "_" в начале и конце, если есть
+        tag = f"REZ_{tag}_"  # Добавляем префикс и суффикс
+        return f'{tag}A{basket}_{module}_{channel}'  # Добавляем префикс и суффикс
 
     def preparation_import(self, uso: str, number_row: int,
                            select_col: tuple) -> list:
@@ -111,46 +122,30 @@ class DataExel:
         data = []
 
         count_row = self.database_count_row()
-
         tuple_name = self.read_hat_table(uso, number_row, True, select_col)
 
         for row in self.sheet.iter_rows(min_row=(int(number_row) + 1)):
-            name = row[tuple_name[NameColumn.NAME.value]].value
-            tag = row[tuple_name[NameColumn.TAG.value]].value
-            type_s = row[tuple_name[NameColumn.TYPE_SIGNAL.value]].value
-            schema = row[tuple_name[NameColumn.SCHEMA.value]].value
-            klk = row[tuple_name[NameColumn.KLK.value]].value
-            contact = row[tuple_name[NameColumn.CONTACT.value]].value
-            basket = row[tuple_name[NameColumn.BASKET.value]].value
-            module = row[tuple_name[NameColumn.MODULE.value]].value
-            channel = row[tuple_name[NameColumn.CHANNEL.value]].value
+            row_data = {col: row[tuple_name[col.value]].value for col in list(NameColumn)[1:]}
+            type_s, tag, name, schema, klk, contact, basket, module, channel = row_data.values()
 
             try:
-                if (basket or module or channel) is None:
+                # Пропускаем строку, если basket, module или channel отсутствуют
+                if not all([basket, module, channel]):
                     continue
                 count_row += 1
 
                 if contact is not None:
                     contact = str(contact).replace('.', ',')
 
-                if tag is None:
-                    if schema is not None or type_s is not None:
-                        if 'RS' not in (schema, type_s):
-                            tag = self.sub_str(uso, basket, module, channel)
+                # Генерируем tag, если он отсутствует и schema или type_s не содержат 'RS'
+                if tag is None and (schema or type_s) and 'RS' not in (schema, type_s):
+                    tag = self.sub_str(uso, basket, module, channel)
 
                 type_s = self.search_type(schema, type_s)
 
-                data.append(dict(id=count_row,
-                                 type_signal=type_s,
-                                 uso=uso,
-                                 tag=tag,
-                                 description=name,
-                                 schema=schema,
-                                 klk=klk,
-                                 contact=contact,
-                                 basket=basket,
-                                 module=module,
-                                 channel=channel))
+                data.append(dict(id=count_row, type_signal=type_s, uso=uso, tag=tag,
+                                 description=name, schema=schema, klk=klk, contact=contact,
+                                 basket=basket, module=module, channel=channel))
             except Exception:
                 self.m_window.logsTextEdit.logs_msg(f'''Импорт КЗФКП. Таблица: signals, class: DataExel, preparation_import -
                                         Пропуск строки {basket}, {module}, {channel}: {traceback.format_exc()}''', 2)
@@ -181,27 +176,31 @@ class Import_in_SQL(DataExel):
 
         dop_msg = ''
         for row in req_sql:
-            dop_msg = self.compare_row(row_exel, dop_msg, row.tag,
-                                       NameColumn.TAG.value)
-            dop_msg = self.compare_row(row_exel, dop_msg, row.description,
-                                       NameColumn.NAME.value)
-            dop_msg = self.compare_row(row_exel, dop_msg, row.schema,
-                                       NameColumn.SCHEMA.value)
-            dop_msg = self.compare_row(row_exel, dop_msg, row.klk,
-                                       NameColumn.KLK.value)
-            dop_msg = self.compare_row(row_exel, dop_msg, row.contact,
-                                       NameColumn.CONTACT.value)
-            if dop_msg != '':
-                Signals.update(**{NameColumn.TAG.value: row_exel[NameColumn.TAG.value],
-                                  NameColumn.NAME.value: row_exel[NameColumn.NAME.value],
-                                  NameColumn.SCHEMA.value: row_exel[NameColumn.SCHEMA.value],
-                                  NameColumn.KLK.value: row_exel[NameColumn.KLK.value],
-                                  NameColumn.CONTACT.value: row_exel[NameColumn.CONTACT.value]}).where(
-                    Signals.id == row.id).execute()
+            # Список колонок для сравнения
+            columns_to_compare = [
+                (row.tag, NameColumn.TAG.value),
+                (row.description, NameColumn.NAME.value),
+                (row.schema, NameColumn.SCHEMA.value),
+                (row.klk, NameColumn.KLK.value),
+                (row.contact, NameColumn.CONTACT.value)]
 
-                self.logs_msg(f'''Импорт КД:
-                              name = {row_exel[NameColumn.NAME.value]},
-                              id = {row.id}, {dop_msg} сигнал обновлен''', 0)
+            # Сравниваем каждую колонку и обновляем dop_msg
+            for value, column in columns_to_compare:
+                dop_msg = self.compare_row(row_exel, dop_msg, value, column)
+
+            # Если dop_msg не пустой, обновляем запись в базе данных
+            if dop_msg:
+                update_data = {
+                    NameColumn.TAG.value: row_exel[NameColumn.TAG.value],
+                    NameColumn.NAME.value: row_exel[NameColumn.NAME.value],
+                    NameColumn.SCHEMA.value: row_exel[NameColumn.SCHEMA.value],
+                    NameColumn.KLK.value: row_exel[NameColumn.KLK.value],
+                    NameColumn.CONTACT.value: row_exel[NameColumn.CONTACT.value]
+                }
+                Signals.update(**update_data).where(Signals.id == row.id).execute()
+
+                self.logs_msg(f'''Импорт КД: name = {row_exel[NameColumn.NAME.value]}, id = {row.id},
+                              {dop_msg} сигнал обновлен''', 0)
 
     def work_table(self, clear: bool = False):
         '''Создание или очищение таблицы Signals.'''

@@ -9,7 +9,7 @@ class DatabaseManager:
     """
     Универсальный класс для управления подключением к базе данных с использованием peewee.
     """
-    def __init__(self, logstext,
+    def __init__(self, parent,
                  db_type: str,
                  database: str,
                  user: Optional[str] = None,
@@ -28,7 +28,7 @@ class DatabaseManager:
         :param host: Хост.
         :param port: Порт.
         """
-        self.logstext = logstext
+        self.logs_msg = parent.logsTextEdit.logs_msg
         self.db_type = db_type
         self.database = database
         self.user = user
@@ -78,13 +78,13 @@ class DatabaseManager:
         try:
             if not self.is_connected():
                 self.db.connect()
-                self.logstext.logs_msg(f"БД: cоединение с базой данных '{self.database}' установлено", 0)
+                self.logs_msg(f"БД: cоединение с базой данных '{self.database}' установлено", 0)
                 print(f"Соединение с базой данных '{self.database}' установлено.")
             else:
-                self.logstext.logs_msg(f"БД: cоединение с базой данных '{self.database}' уже установлено", 0)
+                self.logs_msg(f"БД: cоединение с базой данных '{self.database}' уже установлено", 0)
                 print(f"Соединение с базой данных '{self.database}' уже установлено")
         except OperationalError as e:
-            self.logstext.logs_msg(f"БД: ошибка подключения к базе данных '{self.database}': {e}", 2)
+            self.logs_msg(f"БД: ошибка подключения к базе данных '{self.database}': {e}", 2)
             print(f"Ошибка подключения к базе данных '{self.database}': {e}")
 
     def disconnect(self) -> None:
@@ -94,13 +94,13 @@ class DatabaseManager:
         try:
             if self.is_connected():
                 self.db.close()
-                self.logstext.logs_msg(f"БД: cоединение с базой данных '{self.database}' разорвано", 2)
+                self.logs_msg(f"БД: cоединение с базой данных '{self.database}' разорвано", 2)
                 print(f"Соединение с базой данных '{self.database}' разорвано")
             else:
-                self.logstext.logs_msg(f"БД: cоединение с базой данных '{self.database}' уже разорвано", 2)
+                self.logs_msg(f"БД: cоединение с базой данных '{self.database}' уже разорвано", 2)
                 print(f"Соединение с базой данных '{self.database}' уже разорвано")
         except OperationalError as e:
-            self.logstext.logs_msg(f"БД: ошибка при разрыве соединения с базой данных '{self.database}': {e}", 2)
+            self.logs_msg(f"БД: ошибка при разрыве соединения с базой данных '{self.database}': {e}", 2)
             print(f"Ошибка при разрыве соединения с базой данных '{self.database}': {e}")
 
     def connect_default_db(self) -> None:
@@ -154,17 +154,17 @@ class DatabaseManager:
             if not self.check_database_exists():
                 # Создаем новую базу данных
                 default_db.execute_sql(f'CREATE DATABASE {dbname};')
-                self.logstext.logs_msg(f"БД: '{dbname}' успешно создана", 0)
+                self.logs_msg(f"БД: '{dbname}' успешно создана", 0)
                 print(f"База данных '{dbname}' успешно создана")
             else:
-                self.logstext.logs_msg(f"БД: '{dbname}' уже существует", 0)
+                self.logs_msg(f"БД: '{dbname}' уже существует", 0)
                 print(f"База данных '{dbname}' уже существует")
 
             # Закрываем соединение
             default_db.close()
 
         except Error as e:
-            self.logstext.logs_msg(f"БД: Ошибка при создании базы данных: {e}", 0)
+            self.logs_msg(f"БД: Ошибка при создании базы данных: {e}", 0)
             print(f"Ошибка при создании базы данных: {e}")
 
     def execute_query_one(self, query: str) -> Optional[list]:

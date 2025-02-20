@@ -1,8 +1,9 @@
 import re
 import traceback
+from peewee import OperationalError
 from model import DI
 from model import Signals
-from request_sql import RequestSQL
+from model import HardWare
 from general_functions import General_functions
 
 T_SIGNALS = 'signals'
@@ -12,9 +13,12 @@ T_DI = ' di'
 
 class InDiskrets():
     '''Заполнение таблицы.'''
-    def __init__(self, logtext):
-        self.logsTextEdit = logtext
-        self.request = RequestSQL()
+    def __init__(self, mainwindow):
+
+        self.mainwindow = mainwindow
+        self.logs_msg = self.mainwindow.logsTextEdit.logs_msg
+        self.db_manager = self.mainwindow.tab_1.db_dev
+        self.db_orm = self.mainwindow.tab_1.db_dev.get_database()
         self.dop_function = General_functions()
 
     def check_table(self):
@@ -40,70 +44,25 @@ class InDiskrets():
                                            добавлена''', 0)
             return True
 
-    def module_calc(self, uso, basket, module):
+    def calculating_module(self, uso, basket, module):
         '''Вычисление сквозного номера модуля для
         заполнения pValue, pHealth из таблицы HW.'''
-        try:
-            hw = self.request.where_select(T_HW, f'variable_{module}, tag',
-                                           f'''"uso"='{uso}' and "basket"='{basket}' ''', 'id')
-            if len(hw) > 1:
-                self.logsTextEdit.logs_msg(f'''SQL. DI.
-                                           {uso}.A{basket}_{module},
-                                           при вычислении номера
-                                           для pValue и pHealth обнаружено
-                                           несколько модулей!''', 2)
+        try:          
+            query = (HardWare
+                     .select(getattr(HardWare, f'variable_{module}'), HardWare.tag)
+                     .where((HardWare.uso == uso) & (HardWare.basket == basket))
+                     .order_by(HardWare.id)
+                     .tuples())
+            result = list(query)
+    
+            if len(result) > 1:
+                self.logs_msg(f'''SQL. DI. {uso}.A{basket}_{module}, при вычислении номера
+                              для pValue и pHealth обнаружено несколько модулей!''', 2)
                 return 'NULL'
-            return re.findall('\d+', hw[0][0])[0], hw[0][1]
-        except Exception:
-            self.logsTextEdit.logs_msg(f'''SQL. DI. {uso}.A{basket}_{module},
-                                       номер модуля pValue и
-                                       pHealth не найден!''', 1)
+            return re.findall('\d+', result[0][0])[0], result[0][1]
+        except OperationalError as e:
+            self.logs_msg(f'''SQL. DI. Ошибка выполнения запроса: {e}''', 1)
             return 'NULL', None
-
-    def process_request(self):
-        '''Обработка нескольких запросов.'''
-        where_1 = (Signals.tag % ('CSC%'))
-        where_2 = (Signals.schema % ('DI%')) & (~(Signals.tag % ('CSC%')))
-        where_3 = (Signals.schema % ('DM%')) & (Signals.type_signal % ('DI%'))
-        where = [where_1, where_2, where_3]
-
-        fl_empty = False if self.count_row > 1 else True
-
-        for order in range(3):
-            data = self.request.select_orm(Signals, where[order],
-                                           Signals.description)
-            count_rez = 0 if order == 2 else int(len(data) * 0.3)
-            # Проверяем, обновляем или добавляем сигнал
-            self.check_signal(data)
-            # Добавляем резервы
-            if count_rez and fl_empty:
-                self.add_empty_row(count_rez)
-
-    def check_signal(self, data):
-        '''Проверка сигнала на существование в таблице DI.
-        По УСО, корзине, модулю и каналу.'''
-        for signal in data:
-            uso = signal.uso
-            basket = signal.basket
-            module = signal.module
-            channel = signal.channel
-            coinc = self.request.select_orm(DI,
-                                            (DI.uso == uso) &
-                                            (DI.basket == basket) &
-                                            (DI.module == module) &
-                                            (DI.channel == channel),
-                                            DI.basket)
-            for i in coinc:
-                self.msg_id = i.id
-
-            if bool(coinc):
-                self.update_table(signal)
-            else:
-                self.count_row += 1
-                num_through, tag = self.module_calc(signal.uso,
-                                                    signal.basket,
-                                                    signal.module)
-                self.add_new_signal(signal, num_through, tag)
 
     def add_new_signal(self, signal, num_through, tag):
         '''Добавление нового сигнала.'''
@@ -141,13 +100,12 @@ class InDiskrets():
                        module=signal.module,
                        channel=signal.channel)
 
-        self.request.write_base_orm(list_DI, DI)
-        self.logsTextEdit.logs_msg(f'''SQL. DI. Добавлен
-                                   новый сигнал: {self.count_row}''', 0)
+        DI.insert_many(list_DI).execute()
+        self.logs_msg(f'''SQL. DI. Добавлен новый сигнал: {self.count_row}''', 0)
 
-    def add_empty_row(self, count_rez):
+    def reserve_add(self, reserve):
         '''Добавляем пустые строки для резерва.'''
-        for i in range(self.count_row + 1, self.count_row + count_rez + 1):
+        for i in range(self.count_row + 1, self.count_row + reserve + 1):
             empty_row = dict(id=i,
                              variable=f'DI[{i}]',
                              tag=f'LOGIC_DI_{i}',
@@ -155,35 +113,80 @@ class InDiskrets():
                              tabl_msg='TblDiscretes',
                              group_diskrets='Общие',
                              tag_eng=f'LOGIC_DI_{i}')
-            self.request.write_base_orm(empty_row, DI)
-        self.count_row = self.count_row + count_rez
+            DI.insert_many(empty_row).execute()
+        self.count_row = self.count_row + reserve
 
-    def update_table(self, signal):
+    def update_table(self, signals, discrets):
         '''Обновление тега и названия сигнала в таблице.'''
-        coinc = self.request.select_orm(DI,
-                                        (DI.tag == signal.tag) &
-                                        (DI.name == signal.description),
-                                        DI.basket)
-        if not bool(coinc):
-            self.request.update_base_orm(DI,
-                                         {'tag': signal.tag,
-                                          'name': signal.description},
-                                         (DI.uso == signal.uso) &
-                                         (DI.basket == signal.basket) &
-                                         (DI.module == signal.module) &
-                                         (DI.channel == signal.channel))
-            self.logsTextEdit.logs_msg(f'''SQL. DI.
-                                       Строка обновлена:
-                                       {self.msg_id}''', 0)
+        try:
+            coinciding = (DI
+                        .select()
+                        .where((DI.tag == signals.tag) & (DI.name == signals.description))
+                        .order_by(DI.basket))
+
+            if not bool(coinciding):
+                query = (DI
+                        .update({'tag': signals.tag, 'name': signals.description})
+                        .where((DI.uso == signals.uso)
+                                & (DI.basket == signals.basket)
+                                & (DI.module == signals.module) 
+                                & (DI.channel == signals.channel))
+                        )
+                query.execute()
+
+                first_discrets = list(discrets.tuples())
+                self.logs_msg(f'''SQL. DI. Обновлен сигнал: {first_discrets[0][0]}''', 0)
+        except OperationalError as e:
+            self.logs_msg(f'''SQL. DI. Ошибка выполнения запроса: {e}''', 1)
+
+    def checking_signal(self, data_signals):
+        '''Проверка сигнала на существование в таблице DI.
+        По УСО, корзине, модулю и каналу.'''
+        for signals in data_signals:
+            comparison = (
+                (DI.uso == signals.uso)
+                & (DI.basket == signals.basket)
+                & (DI.module == signals.module)
+                & (DI.channel == signals.channel))
+            query = (DI
+                     .select()
+                     .where(comparison)
+                     .order_by(DI.basket))
+
+            if bool(query):
+                self.update_table(signals, query)
+            else:
+                self.count_row += 1
+                num_through, tag = self.calculating_module(signals.uso, signals.basket, signals.module)
+                self.add_new_signal(signals, num_through, tag)
+
+    def process_request(self):
+        '''Обработка нескольких запросов.'''
+        where_1 = (Signals.tag % ('CSC%'))
+        where_2 = (Signals.schema % ('DI%')) & (~(Signals.tag % ('CSC%')))
+        where_3 = (Signals.schema % ('DM%')) & (Signals.type_signal % ('DI%'))
+        where = [where_1, where_2, where_3]
+
+        for order in range(len(where)):
+            data = (Signals
+                    .select()
+                    .where(where[order])
+                    .order_by(Signals.description))
+
+            # Проверка: обновляем или добавляем
+            self.checking_signal(data)
+
+            # Добавляем резервы
+            fl_empty = False if self.count_row > 1 else True
+            reserve = 0 if order == 2 else int(len(data) * 0.3)
+            if reserve and fl_empty:
+                self.rezerv_add(reserve)
 
     def work_func(self):
         try:
-            self.count_row = self.dop_function.count_row_orm(DI)
-
+            self.count_row = DI.select().count()
             self.process_request()
 
-            self.logsTextEdit.logs_msg('''SQL. DI. Работа
-                                       с таблицей завершена''', 1)
+            self.logs_msg('''SQL. DI. Работа с таблицей завершена''', 1)
         except Exception:
-            self.logsTextEdit.logs_msg(f'''SQL. DI. Ошибка
-                                       {traceback.format_exc()}''', 2)
+            self.logs_msg(f'''SQL. DI. Ошибка {traceback.format_exc()}''', 2)

@@ -1,8 +1,8 @@
 '''Заполнение таблицы разработки HardWare.'''
 import traceback
-from model import HardWare
-from model import Signals
-from request_sql import RequestSQL
+# from model import HardWare
+# from model import Signals
+# from request_sql import RequestSQL
 from general_functions import General_functions
 
 T_SIGNALS = 'signals'
@@ -145,9 +145,12 @@ class ConstValues():
 
 class HW(ConstValues, BaseType):
     '''Заполнение таблицы Hardware.'''
-    def __init__(self, logtext):
-        self.logsTextEdit = logtext
-        self.request = RequestSQL()
+    def __init__(self, mainwindow: None):
+
+        self.m_window = mainwindow
+        self.db = self.m_window.tab_1.db_dev.get_database()
+        self.logs_msg = self.m_window.logsTextEdit.logs_msg
+
         self.dop_function = General_functions()
 
     def check_table(self):
@@ -189,50 +192,50 @@ class HW(ConstValues, BaseType):
         t_flag = False
         powerLink_ID = 0
         counts_uso = 0
-        try:
-            # Проверяем таблицу signals
-            if not self.check_table():
-                raise
-            # Находим названия неповторяющихся шкафов
-            all_uso = self.request.non_repea_names(Signals,
-                                                   Signals.uso,
-                                                   Signals.uso)
-            print('SQL. Hardware. Заполнение таблицы')
-            # self.logsTextEdit.logs_msg('''SQL. Hardware.
-            #                            Заполнение таблицы''', 1)
-            for name in all_uso:
-                counts_uso += 1
-                # Кол-во корзин в УСО
-                total = self.request.non_repea_cond(Signals, Signals.basket,
-                                                    Signals.uso == name.uso,
-                                                    Signals.basket)
-                # Выполняется 1 раз, постоянные строки - КЦ, КК
-                if not t_flag:
-                    err_1, err_all, t_flag = self.add_const_sql(kk_flag,
-                                                                name.uso,
-                                                                total,
-                                                                self.request)
-                if counts_uso <= 2:
-                    countsErr = err_1 if counts_uso == 1 else err_all
+        # try:
+        #     # Проверяем таблицу signals
+        #     if not self.check_table():
+        #         raise
+        #     # Находим названия неповторяющихся шкафов
+        #     all_uso = self.request.non_repea_names(Signals,
+        #                                            Signals.uso,
+        #                                            Signals.uso)
+        #     print('SQL. Hardware. Заполнение таблицы')
+        #     # self.logsTextEdit.logs_msg('''SQL. Hardware.
+        #     #                            Заполнение таблицы''', 1)
+        #     for name in all_uso:
+        #         counts_uso += 1
+        #         # Кол-во корзин в УСО
+        #         total = self.request.non_repea_cond(Signals, Signals.basket,
+        #                                             Signals.uso == name.uso,
+        #                                             Signals.basket)
+        #         # Выполняется 1 раз, постоянные строки - КЦ, КК
+        #         if not t_flag:
+        #             err_1, err_all, t_flag = self.add_const_sql(kk_flag,
+        #                                                         name.uso,
+        #                                                         total,
+        #                                                         self.request)
+        #         if counts_uso <= 2:
+        #             countsErr = err_1 if counts_uso == 1 else err_all
 
-                for number in total:
-                    powerLink_ID += 1
-                    countsErr += 1
-                    # Сортируем неповторяющиеся сигналы по шкафу и корзине
-                    data_basket = self.request.non_repea_cond(Signals,
-                                                              Signals.module,
-                                                              (Signals.uso == number.uso) & (Signals.basket == number.basket),
-                                                              Signals.module)
-                    # Начальные данные корзины: бп, контролл, усо и тд.
-                    write_array = self.assembly_row(countsErr, powerLink_ID,
-                                                    number.basket, number.uso)
-                    # Формирование корзины и запись в SQL
-                    self.write_row(data_basket, write_array)
+        #         for number in total:
+        #             powerLink_ID += 1
+        #             countsErr += 1
+        #             # Сортируем неповторяющиеся сигналы по шкафу и корзине
+        #             data_basket = self.request.non_repea_cond(Signals,
+        #                                                       Signals.module,
+        #                                                       (Signals.uso == number.uso) & (Signals.basket == number.basket),
+        #                                                       Signals.module)
+        #             # Начальные данные корзины: бп, контролл, усо и тд.
+        #             write_array = self.assembly_row(countsErr, powerLink_ID,
+        #                                             number.basket, number.uso)
+        #             # Формирование корзины и запись в SQL
+        #             self.write_row(data_basket, write_array)
 
-            print('SQL. Hardware. Таблица заполнена')
-            # self.logsTextEdit.logs_msg('''SQL. Hardware.
-            #                            Таблица заполнена''', 1)
-        except Exception:
-            print({traceback.format_exc()})
-            # self.logsTextEdit.logs_msg(f'''SQL. Hardware. Ошибка
-            #                            {traceback.format_exc()}''', 2)
+        #     print('SQL. Hardware. Таблица заполнена')
+        #     # self.logsTextEdit.logs_msg('''SQL. Hardware.
+        #     #                            Таблица заполнена''', 1)
+        # except Exception:
+        #     print({traceback.format_exc()})
+        #     # self.logsTextEdit.logs_msg(f'''SQL. Hardware. Ошибка
+        #     #                            {traceback.format_exc()}''', 2)
