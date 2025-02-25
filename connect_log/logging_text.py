@@ -1,4 +1,4 @@
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QTextCursor
 from PyQt5.QtWidgets import QTextEdit
 from datetime import datetime as dt
 
@@ -17,10 +17,16 @@ class LogsTextEdit(QTextEdit):
         self.setStyleSheet('''border-radius: 4px; border: 1px solid''')
         self.setFont(QFont('Arial', 10))
         self.setReadOnly(True)
+        self.moveCursor(QTextCursor.End)
 
     def data_time(self) -> str:
         '''Текущее дата и время'''
         return dt.now().strftime("%d/%m/%y  %H:%M:%S")
+
+    def scroll_to_bottom(self):
+        # Перемещаем курсор в конец текста
+        self.textCursor().movePosition(self.textCursor().End)
+        self.setTextCursor(self.textCursor())
 
     def logs_msg(self, msg: str = None, color: int = 1):
         """Выдача события.
@@ -30,3 +36,5 @@ class LogsTextEdit(QTextEdit):
         """
         event = self.data_time()
         self.append(COLORS.get(color, COLORS[1]).format(f'{event}: {msg}'))
+        # Прокручиваем вниз
+        self.scroll_to_bottom()

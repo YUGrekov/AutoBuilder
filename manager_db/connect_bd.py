@@ -81,7 +81,7 @@ class DatabaseManager:
                 self.logs_msg(f"БД: cоединение с базой данных '{self.database}' установлено", 0)
                 print(f"Соединение с базой данных '{self.database}' установлено.")
             else:
-                self.logs_msg(f"БД: cоединение с базой данных '{self.database}' уже установлено", 0)
+                # self.logs_msg(f"БД: cоединение с базой данных '{self.database}' уже установлено", 0)
                 print(f"Соединение с базой данных '{self.database}' уже установлено")
         except OperationalError as e:
             self.logs_msg(f"БД: ошибка подключения к базе данных '{self.database}': {e}", 2)

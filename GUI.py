@@ -1,71 +1,17 @@
-import sys
-import traceback
-import time
+import sys, traceback, time
 from psycopg2 import Error
-from PyQt5.QtCore import Qt
-from PyQt5.QtCore import QThread
-from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtGui import QIcon
-from PyQt5.QtGui import QIntValidator
-from PyQt5.QtWidgets import QApplication
-from PyQt5.QtWidgets import QMainWindow
-from PyQt5.QtWidgets import QTabWidget
-from PyQt5.QtWidgets import QLineEdit
-from PyQt5.QtWidgets import QWidget
-from PyQt5.QtWidgets import QHBoxLayout
-from PyQt5.QtWidgets import QVBoxLayout
-from PyQt5.QtWidgets import QSplitter
-from PyQt5.QtWidgets import QPushButton
-from PyQt5.QtWidgets import QLabel
-from PyQt5.QtWidgets import QComboBox
-from PyQt5.QtWidgets import QCheckBox
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtGui import QIcon, QIntValidator
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QLineEdit, QWidget, QCheckBox
+from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout, QSplitter, QPushButton, QLabel, QComboBox
+
+from base_model import BaseModel
 from connect_log.logging_text import LogsTextEdit
 from sql_edit.window_editing import MainWindow as WinEditing
 from general_functions import General_functions as DopFunction
-# from manager_db.new_db import NewDB
-from base_model import BaseModel
 from manager_db.connect_bd import DatabaseManager
-# from model import connect
-# from model import db
-# from model import db_prj
 from connect_log.connect_settings import Connect
 from excel.workingKD import Import_in_SQL
-# from request_sql import RequestSQL
-# from sql_bd.hardware import HW
-# from sql_bd.diskrets_in import InDiskrets
-# from hmi_defence import DefenceMap
-# from hmi_uso import DaignoPicture
-# from hmi_siren import Alarm_map
-# from txt_trends import TreeTrends
-# from map_address import AnalogsMap
-# from map_address import DiskretsMap
-# from map_address import VSMap
-# from map_address import ZDMap
-# from map_address import PumpsMap
-# from map_address import UtsUptsMap
-# from map_address import PicturesMap
-# from map_address import KTPRMap
-# from map_address import KTPRAMap
-# from map_address import GMPNAMap
-# from map_address import PIMap
-# from map_address import PZMap
-# from map_address import RelaytedSystemMap
-# from map_address_diag import DiagMap
-# from map_address_diag import RackStateMap
-# from omx_object import AnalogsOmx
-# from omx_object import DiskretsOmx
-# from omx_object import VSOmx
-# from omx_object import ZDOmx
-# from omx_object import NAOmx
-# from omx_object import UtsUptsOmx
-# from omx_object import PIOmx
-# from omx_object import PZOmx
-# from omx_object import PICOmx
-# from omx_object import SSOmx
-# from omx_object import KTPROmx
-# from omx_object import KtpraGmpnaOmx
-# from omx_object import DIAGOmx
-# from omx_object import AttrDIAGOmx
 
 
 SIZE_WORK_BACK = (1002, 500)
@@ -768,27 +714,34 @@ class DevSQL(QWidget):
         self.db_manager = parent.tab_1
 
         self.dop_function = DopFunction()
-        self.theread = {}
-        self.worker = ThreadClass(self.worker)
+        self.worker = None
 
-        layout_h1 = QHBoxLayout()
-        layout_h2 = QHBoxLayout()
-        layout_h3 = QHBoxLayout()
-        layout_h4 = QHBoxLayout()
-        layout_v1 = QVBoxLayout()
-        layout_v2 = QVBoxLayout()
-        layout_v3 = QVBoxLayout()
-        layout_v4 = QVBoxLayout()
-        layout_v5 = QVBoxLayout()
-        layout_v6 = QVBoxLayout(self)
+        self.setup_ui()
 
-        name_page = ElementSignature('\t\t\t\tЗаполнение таблиц БД SQL разработки\t\t\t\t')
-        name_page.setStyleSheet("""*{font:14px times; background: #6979c9; color: white;
-                                     padding: 2px; border-radius: 3}""")
+    def setup_ui(self):
+        self.create_layouts()
+        self.create_widgets()
+        self.add_widgets_to_layouts()
 
-        help_1 = ElementSignature('* таблица signals должна быть заполнена\n* связь с БД разработки должна быть установлена')
-        help_1.setStyleSheet("""*{font:10px times;
-                             }""")
+    def create_layouts(self):
+        self.layout_h1 = QHBoxLayout()
+        self.layout_h2 = QHBoxLayout()
+        self.layout_h3 = QHBoxLayout()
+        self.layout_h4 = QHBoxLayout()
+        self.layout_v1 = QVBoxLayout()
+        self.layout_v2 = QVBoxLayout()
+        self.layout_v3 = QVBoxLayout()
+        self.layout_v4 = QVBoxLayout()
+        self.layout_v5 = QVBoxLayout()
+        self.layout_v6 = QVBoxLayout(self)
+
+    def create_widgets(self):
+        self.name_page = ElementSignature('\t\t\t\tЗаполнение таблиц БД SQL разработки\t\t\t\t')
+        self.name_page.setStyleSheet("""*{font:14px times; background: #6979c9; color: white;
+                                         padding: 2px; border-radius: 3}""")
+
+        self.help_1 = ElementSignature('* таблица signals должна быть заполнена\n* связь с БД разработки должна быть установлена')
+        self.help_1.setStyleSheet("""*{font:10px times;}""")
 
         self.checkbox_hw = CheckBox('HardWare')
         self.checkbox_uso = CheckBox('USO')
@@ -804,60 +757,62 @@ class DevSQL(QWidget):
         self.checkbox_pi = CheckBox('PI')
         self.checkbox_pt = CheckBox('PT')
 
-        button_start = GenFormButton('Заполнить таблицу', clicked=self.click_fill_table)
-        button_clear = GenFormButton('Очистить таблицу', clicked=self.clear_table)
+        self.button_start = GenFormButton('Заполнить таблицу', clicked=self.click_fill_table)
+        self.button_clear = GenFormButton('Очистить таблицу', clicked=self.clear_table)
 
-        layout_v1.addWidget(self.checkbox_hw)
-        layout_v1.addWidget(self.checkbox_uso)
-        layout_v1.addStretch()
+    def add_widgets_to_layouts(self):
+        self.layout_v1.addWidget(self.checkbox_hw)
+        self.layout_v1.addWidget(self.checkbox_uso)
+        self.layout_v1.addStretch()
 
-        layout_v2.addWidget(self.checkbox_ai)
-        layout_v2.addWidget(self.checkbox_ao)
-        layout_v2.addWidget(self.checkbox_di)
-        layout_v2.addWidget(self.checkbox_do)
-        layout_v2.addWidget(self.checkbox_rs)
-        layout_v2.addStretch()
+        self.layout_v2.addWidget(self.checkbox_ai)
+        self.layout_v2.addWidget(self.checkbox_ao)
+        self.layout_v2.addWidget(self.checkbox_di)
+        self.layout_v2.addWidget(self.checkbox_do)
+        self.layout_v2.addWidget(self.checkbox_rs)
+        self.layout_v2.addStretch()
 
-        layout_v3.addWidget(self.checkbox_umpna)
-        layout_v3.addWidget(self.checkbox_zd)
-        layout_v3.addWidget(self.checkbox_vs)
-        layout_v3.addStretch()
+        self.layout_v3.addWidget(self.checkbox_umpna)
+        self.layout_v3.addWidget(self.checkbox_zd)
+        self.layout_v3.addWidget(self.checkbox_vs)
+        self.layout_v3.addStretch()
 
-        layout_v4.addWidget(self.checkbox_ktpr)
-        layout_v4.addStretch()
+        self.layout_v4.addWidget(self.checkbox_ktpr)
+        self.layout_v4.addStretch()
 
-        layout_v5.addWidget(self.checkbox_pi)
-        layout_v5.addWidget(self.checkbox_pt)
-        layout_v5.addStretch()
+        self.layout_v5.addWidget(self.checkbox_pi)
+        self.layout_v5.addWidget(self.checkbox_pt)
+        self.layout_v5.addStretch()
 
-        layout_h1.addWidget(name_page)
-        layout_h1.addStretch()
+        self.layout_h1.addWidget(self.name_page)
+        self.layout_h1.addStretch()
 
-        layout_h2.addLayout(layout_v1)
-        layout_h2.addLayout(layout_v2)
-        layout_h2.addLayout(layout_v3)
-        layout_h2.addLayout(layout_v4)
-        layout_h2.addLayout(layout_v5)
+        self.layout_h2.addLayout(self.layout_v1)
+        self.layout_h2.addLayout(self.layout_v2)
+        self.layout_h2.addLayout(self.layout_v3)
+        self.layout_h2.addLayout(self.layout_v4)
+        self.layout_h2.addLayout(self.layout_v5)
 
-        layout_h3.addWidget(button_start)
-        layout_h3.addSpacing(80)
-        layout_h3.addWidget(button_clear)
+        self.layout_h3.addWidget(self.button_start)
+        self.layout_h3.addSpacing(80)
+        self.layout_h3.addWidget(self.button_clear)
 
-        layout_h4.addWidget(help_1)
+        self.layout_h4.addWidget(self.help_1)
 
-        layout_v6.addLayout(layout_h1)
-        layout_v6.addLayout(layout_h2)
-        layout_v6.addLayout(layout_h3)
-        layout_v6.addLayout(layout_h4)
+        self.layout_v6.addLayout(self.layout_h1)
+        self.layout_v6.addLayout(self.layout_h2)
+        self.layout_v6.addLayout(self.layout_h3)
+        self.layout_v6.addLayout(self.layout_h4)
 
     def init_attrib(self, table: str):
         '''Создание необходимых экземпляров.'''
         BaseModel._meta.database = self.db_manager.db_dev.get_database()
         from sql_bd.diskrets_in import InDiskrets
+        from sql_bd.diskrets_out import OutDiskrets
 
         attrib = {'hardware': '1',
                   'di': InDiskrets(self.mainwindow),
-                  '3': '8',
+                  'do': OutDiskrets(self.mainwindow),
                   '4': '9',
                   '5': '10',
                   '6': '11'}
@@ -877,39 +832,78 @@ class DevSQL(QWidget):
                      self.checkbox_zd: 'zd',
                      self.checkbox_vs: 'vs'
                      }
-        return [table for checkbox, table in list_help.items() if checkbox.isChecked()]
+        list_checked = [table for checkbox, table in list_help.items() if checkbox.isChecked()]
+        # Предупреждение, если таблицы не были выбраны
+        if not list_checked:
+            self.logs_msg(f'SQL. Выбери таблицу(ы)', 3)
+        return list_checked
+    
+    def exists_table(self, table):
+        ''' Проверяем таблицу на существование в БД.'''
+        return (True if table in self.db_manager.db_dev.get_tables() else False)
+    
+    def conn_check(self):
+            if hasattr(self.db_manager, 'db_dev'):
+                return True if self.db_manager.db_dev.is_connected() else False
+            else:
+                return False
 
     def clear_table(self):
-        '''Очистка(не удаление) таблицы.'''
-        for param in self.check_attr():
-            try:
-                reqsql = RequestSQL()
-                # Проверяем существование таблицы. В случае True чистим, иначе пропускаем
-                if self.dop_function.check_in_table(param[0], reqsql.get_tabl()):
-                    reqsql.clear_table(param[0])
-                    self.logs_msg(f'''БД разработки: таблица {param[0]} очищена''', 1)
-                else:
-                    self.logs_msg(f'''БД разработки: таблица {param[0]} отсутствует в БД разработки''', 2)
-
-            except Exception:
-                self.logs_msg('''БД разработки: нет подключения''', 2)
-                return
+        '''Чистка таблицы.'''
+        try:
+            # Соединение с БД
+            if not self.conn_check():
+                raise
+            for table in self.select_checkbox():
+                # Проверка таблицы на существование
+                if not self.exists_table(table):
+                    return self.logs_msg(f'SQL. {str(table).upper()}. Таблица {table} отсутсвует в БД', 2)
+                try:
+                    self.db_manager.db_dev.query_no_return(f'DELETE FROM "{table}"')
+                    self.logs_msg(f'SQL. {str(table).upper()}. Таблица {table} очищена', 3)
+                except Exception:
+                    return self.logs_msg(f'БД разработки: ошибка чистки {traceback.format_exc()}', 2)
+        except Exception:
+            self.logs_msg(f'SQL. Отсутствует соединение с БД', 2)
 
     def click_fill_table(self):
         '''Заполнение таблицы БД.'''
-        for param in self.select_checkbox():
-            print()
-            # table = self.init_attrib(param)
-            # table.work_func()
-        # self.worker.start()
-        # print('Start asynh code')
+        try:
+            # Соединение с БД
+            if not self.conn_check():
+                raise
+            self.worker = ThreadClass(self.worker_func)
+            self.worker.logs_msg.connect(self.handle_signal)
+            self.worker.dop_method.connect(self.start_function)
+            self.worker.start()
+            print('Start async code')
+        except Exception:
+            self.logs_msg(f'SQL. Отсутствует соединение с БД', 2)
 
-    def worker(self):
-        for param in self.select_checkbox():
-            table = self.init_attrib(param)
-            table.work_func()
+    def worker_func(self):
+        for self.table in self.select_checkbox():
+            if not self.exists_table(self.table):
+                self.worker.logs_msg.emit(f'Таблица {self.table} отсутствует в БД')
+                continue
+
+            # self.worker.dop_method.emit(self.table)
+            param = self.init_attrib(self.table)
+            param.work_func()
             time.sleep(1)
-            print(param)
+
+        self.worker.logs_msg.emit('Выполнение завершено')
+        self.worker.is_running = False
+        print('STOP')
+
+    def start_function(self, table):
+        param = self.init_attrib(table)
+        param.work_func()
+    
+    def handle_signal(self, message):
+        if 'отсутствует в БД' in message:
+            self.logs_msg(f'SQL. {str(self.table).upper()}. {message}', 2)
+        else:  
+            self.logs_msg(f'SQL. {message}', 1)
 
 
 # Заполнение DevStudio
@@ -1338,7 +1332,8 @@ class MainWindow(QMainWindow):
 
 
 class ThreadClass(QThread):
-    any_signal = pyqtSignal()
+    logs_msg = pyqtSignal(str)  # Сигнал для передачи строки
+    dop_method = pyqtSignal(str)  # Сигнал для доп функций
 
     def __init__(self, func, parent=None):
         super(ThreadClass, self).__init__(parent)
@@ -1346,7 +1341,8 @@ class ThreadClass(QThread):
         self.func = func
 
     def run(self):
-        self.func()
+        while self.is_running:
+            self.func()
 
     def stop(self):
         self.is_running = False
