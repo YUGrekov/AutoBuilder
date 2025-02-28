@@ -1,8 +1,8 @@
-import sys, traceback, time
+import sys, traceback, time 
 from psycopg2 import Error
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QIcon, QIntValidator
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QLineEdit, QWidget, QCheckBox
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QLineEdit, QWidget, QCheckBox, QScrollArea
 from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout, QSplitter, QPushButton, QLabel, QComboBox
 
 from base_model import BaseModel
@@ -56,19 +56,92 @@ class TabWidget(QTabWidget):
                            """)
 
 
+class WindowCheckbox(QMainWindow):
+    """Окно по клику правой кнопкой мыши по элементу Checkbox."""
+    # Создаем сигнал для передачи выбранных элементов и идентификатора окна
+    selection_saved = pyqtSignal(str, list)
+
+    def __init__(self, window_id, table_name, data, parent=None):
+        super(WindowCheckbox, self).__init__(parent)
+        self.window_id = window_id  # Уникальный идентификатор окна
+        self.table_name = table_name
+        self.data = data
+        self.setWindowTitle(f"Выбор сигналова: {self.table_name}")
+        self.setGeometry(118, 200, 340, 566)  # Устанавливаем размеры окна
+
+        # Создаем главный виджет и layout
+        main_widget = QWidget()
+        self.setCentralWidget(main_widget)
+        layout = QVBoxLayout(main_widget)
+
+        # Создаем QTabWidget
+        tab_widget = QTabWidget()
+        layout.addWidget(tab_widget)
+
+        # Создаем прокручиваемую область
+        scroll_area = QScrollArea()
+        scroll_widget = QWidget()
+
+        # Сохраняем layout для доступа к checkbox
+        self.scroll_layout = QVBoxLayout(scroll_widget)
+
+        # Добавляем QCheckBox для каждого элемента массива
+        self.checkboxes = []  # Список для хранения всех QCheckBox
+        for item in self.data:
+            checkbox = QCheckBox(item)
+            self.scroll_layout.addWidget(checkbox)
+            self.checkboxes.append(checkbox)  # Добавляем checkbox в список
+
+        scroll_area.setWidget(scroll_widget)
+        tab_widget.addTab(scroll_area, f"Сигналы для таблицы {self.table_name}")
+
+        # Добавляем кнопку "Сохранить выбор"
+        save_button = QPushButton("Сохранить выбор")
+        save_button.clicked.connect(self.save_selection)  # Подключаем метод сохранения
+        layout.addWidget(save_button)
+
+    def save_selection(self):
+        """Метод для сохранения выбранных элементов"""
+        self.selected_items = []
+        for checkbox in self.checkboxes:
+            if checkbox.isChecked():  # Проверяем, отмечен ли checkbox
+                self.selected_items.append(checkbox.text())  # Добавляем текст выбранного элемента
+        # Передаем выбранные элементы и идентификатор окна через сигнал
+        self.selection_saved.emit(self.window_id, self.selected_items)
+        # Закрываем окно после сохранения
+        self.close()
+
+
 class CheckBox(QCheckBox):
     '''Конструктор класса чекбокса.'''
     def __init__(self, *args, **kwargs):
         super(CheckBox, self).__init__(*args, **kwargs)
         self.setStyleSheet("""*{font:13px times;
-                                border: 1px solid #a19f9f;
-                                min-height: 20;
-                                min-width: 100;
-                                max-width: 100;
-                                padding: 4px; border-radius: 4}
-                                *:hover{background:#e0e0e0;
-                                        color:'black'}
-                                *:pressed{background: '#e0e0e0'}""")
+                           border: 1px solid #a19f9f;
+                           min-height: 20; min-width: 100; max-width: 100;
+                           padding: 4px; border-radius: 4}
+                           *:hover{background:#e0e0e0; color:'black'}
+                           *:pressed{background: '#e0e0e0'}""")
+
+
+class CustomCheckBox(QCheckBox):
+    def __init__(self, table_name, parent=None):
+        super().__init__(table_name, parent)
+        self.table_name = table_name
+        self.setStyleSheet("""*{font:13px times;
+                           border: 1px solid #a19f9f;
+                           min-height: 20; min-width: 100; max-width: 100;
+                           padding: 4px; border-radius: 4}
+                           *:hover{background:#e0e0e0; color:'black'}
+                           *:pressed{background: '#e0e0e0'}""")
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.RightButton:
+            print("Правый клик на QCheckBox!")
+            self.parent().open_table_data(self.table_name)
+        else:
+            # Вызываем стандартное поведение для других кнопок
+            super().mousePressEvent(event)
 
 
 class PushButton(QPushButton):
@@ -716,6 +789,7 @@ class DevSQL(QWidget):
         self.dop_function = DopFunction()
         self.worker = None
 
+        self.selections = {}
         self.setup_ui()
 
     def setup_ui(self):
@@ -751,8 +825,8 @@ class DevSQL(QWidget):
         self.checkbox_do = CheckBox('DO')
         self.checkbox_rs = CheckBox('RS')
         self.checkbox_umpna = CheckBox('UMPNA')
-        self.checkbox_zd = CheckBox('ZD')
-        self.checkbox_vs = CheckBox('VS')
+        self.checkbox_zd = CustomCheckBox('ZD', self)
+        self.checkbox_vs = CustomCheckBox('VS', self)
         self.checkbox_ktpr = CheckBox('KTPR')
         self.checkbox_pi = CheckBox('PI')
         self.checkbox_pt = CheckBox('PT')
@@ -804,18 +878,57 @@ class DevSQL(QWidget):
         self.layout_v6.addLayout(self.layout_h3)
         self.layout_v6.addLayout(self.layout_h4)
 
+    def open_table_data(self, table_name):
+        try:
+            BaseModel._meta.database = self.db_manager.db_dev.get_database()
+            # Выбираем нужный класс в зависимости от table_name
+            if table_name == "ZD":
+                from sql_bd.zd_valves import InitValves
+                data_source = InitValves(self)
+                window_id = 'ZD'
+            # elif table_name == "VS":
+            #     from sql_bd.vs_valves import InitAuxSystem
+            #     data_source = InitAuxSystem(self)
+            #     window_id = 'VS'
+            else:
+                raise ValueError(f"Неизвестное имя таблицы: {table_name}")
+
+            # Получаем список данных
+            data_list = data_source.get_list()
+
+            # Выводим имена элементов (для отладки):
+            sorting_list = []
+            for item in data_list:
+                sorting_list.append(item.name)
+
+            self.tab_widget = WindowCheckbox(window_id, table_name, sorting_list)
+            self.tab_widget.selection_saved.connect(self.handle_selection)
+            self.tab_widget.show()
+        except Exception:
+            self.logs_msg(f'SQL. Отсутствует соединение с БД', 2)
+
+    def handle_selection(self, window_id, selected_items):
+        """Метод для обработки выбранных элементов"""
+        self.selections[window_id] = selected_items  # Сохраняем выбранные элементы в словарь
+        print("Текущие выборы:", self.selections)  # Выводим все сохраненные выборы
+
     def init_attrib(self, table: str):
         '''Создание необходимых экземпляров.'''
         BaseModel._meta.database = self.db_manager.db_dev.get_database()
         from sql_bd.diskrets_in import InDiskrets
         from sql_bd.diskrets_out import OutDiskrets
+        from sql_bd.analog_out import OutAnalog
+        from sql_bd.rs_interface import Interface
+        from sql_bd.zd_valves import Valves
 
         attrib = {'hardware': '1',
-                  'di': InDiskrets(self.mainwindow),
-                  'do': OutDiskrets(self.mainwindow),
-                  '4': '9',
-                  '5': '10',
-                  '6': '11'}
+                'di': InDiskrets(self.mainwindow),
+                'do': OutDiskrets(self.mainwindow),
+                'ai': '9',
+                'ao': OutAnalog(self.mainwindow),
+                'rs': Interface(self.mainwindow),
+                'zd': Valves(self.mainwindow, self),
+                'vs': '12'}
         return attrib[table]
 
     def select_checkbox(self):
@@ -872,11 +985,21 @@ class DevSQL(QWidget):
             # Соединение с БД
             if not self.conn_check():
                 raise
-            self.worker = ThreadClass(self.worker_func)
-            self.worker.logs_msg.connect(self.handle_signal)
-            self.worker.dop_method.connect(self.start_function)
-            self.worker.start()
-            print('Start async code')
+            # ---------------------------------
+            for self.table in self.select_checkbox():
+                if not self.exists_table(self.table):
+                    self.worker.logs_msg.emit(f'Таблица {self.table} отсутствует в БД')
+                    continue
+                
+                param = self.init_attrib(self.table)
+                param.work_func()
+            # ---------------------------------
+
+            # self.worker = ThreadClass(self.worker_func)
+            # self.worker.logs_msg.connect(self.handle_signal)
+            # self.worker.dop_method.connect(self.start_function)
+            # self.worker.start()
+            # print('Start async code')
         except Exception:
             self.logs_msg(f'SQL. Отсутствует соединение с БД', 2)
 
